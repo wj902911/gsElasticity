@@ -1,3 +1,5 @@
 .DS_Store
 examples/genMPDeform.cpp
 examples/extractBdry.cpp
+/.vs
+/out/build/x64-Debug
