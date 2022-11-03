@@ -4,7 +4,7 @@
 ///
 /// Author: A.Shamanskiy (2016 - ...., TU Kaiserslautern)
 #include <gismo.h>
-#include <gsElasticity/gsElasticityAssembler.h>
+#include <gsElasticity/gsElasticityAssembler_elasticSurface.h>
 #include <gsElasticity/gsIterative.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
 
@@ -21,9 +21,9 @@ int main(int argc, char* argv[]){
     std::string filename = ELAST_DATA_DIR"/cooks.xml";
     real_t youngsModulus = 240.565e6;
     real_t poissonsRatio = 0.4;
-    index_t numUniRef = 4;
+    index_t numUniRef = 1;
     index_t numDegElev = 1;
-    index_t numPlotPoints = 10000;
+    index_t numPlotPoints = 100;
 
     // minimalistic user interface for terminal
     gsCmdLine cmd("This is Cook's membrane benchmark with nonlinear elasticity solver.");
@@ -40,6 +40,7 @@ int main(int argc, char* argv[]){
     // scanning geometry
     gsMultiPatch<> geometry;
     gsReadFile<>(filename, geometry);
+    gsGeometry<> *pGeom = &geometry.patch(0);
     // creating bases
     gsMultiBasis<> basisDisplacement(geometry);
     for (index_t i = 0; i < numDegElev; ++i)
@@ -52,13 +53,16 @@ int main(int argc, char* argv[]){
     //=============================================//
 
     // neumann BC
-    gsConstantFunction<> f(0.,625e4,2);
+    gsConstantFunction<> f(625e4, 0., 2);
+    // elasticSurface BC
+    gsConstantFunction<> surfaceTention(4., 1);
 
     // boundary conditions
     gsBoundaryConditions<> bcInfo;
     for (index_t d = 0; d < 2; ++d)
         bcInfo.addCondition(0,boundary::west,condition_type::dirichlet,nullptr,d);
-    bcInfo.addCondition(0,boundary::east,condition_type::neumann,&f);
+    bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
+    bcInfo.addCondition(0, boundary::east, condition_type::robin, &surfaceTention);
 
     // source function, rhs
     gsConstantFunction<> g(0.,0.,2);
@@ -68,7 +72,7 @@ int main(int argc, char* argv[]){
     //=============================================//
 
     // creating assembler
-    gsElasticityAssembler<real_t> assembler(geometry,basisDisplacement,bcInfo,g);
+    gsElasticityAssembler_elasticSurface<real_t> assembler(geometry,basisDisplacement,bcInfo,g);
     assembler.options().setReal("YoungsModulus",youngsModulus);
     assembler.options().setReal("PoissonsRatio",poissonsRatio);
     assembler.options().setInt("MaterialLaw",material_law::neo_hooke_ln);
@@ -95,6 +99,9 @@ int main(int argc, char* argv[]){
     gsPiecewiseFunction<> stresses;
     assembler.constructCauchyStresses(displacement,stresses,stress_components::von_mises);
 
+	gsMesh<> mesh;
+    pGeom->controlNet(mesh);
+	
     if (numPlotPoints > 0)
     {
         // constructing an IGA field (geometry + solution)
@@ -106,6 +113,16 @@ int main(int argc, char* argv[]){
         fields["von Mises"] = &stressField;
         gsWriteParaviewMultiPhysics(fields,"cooks",numPlotPoints);
         gsInfo << "Open \"cooks.pvd\" in Paraview for visualization.\n";
+
+		
+        std::string out = "Geometry";
+        gsWriteParaview(*pGeom, out);
+		
+        out = "Basis";
+        gsWriteParaview(basisDisplacement[0], out);
+		
+        out = "ContolNet";
+        gsWriteParaview(mesh, out);
     }
 
     // validation
