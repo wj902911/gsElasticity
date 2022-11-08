@@ -15,15 +15,10 @@ gsElasticityAssembler_elasticSurface<T>::gsElasticityAssembler_elasticSurface(co
 		                                                                      const gsMultiBasis<T>& basis,
 		                                                                      const gsBoundaryConditions<T>& bconditions,
 		                                                                      const gsFunction<T>& body_force)
-		                                            :gsElasticityAssembler<T>(patches, 
-															                  basis, 
-															                  bconditions, 
-															                  body_force)
+:gsElasticityAssembler<T>(patches, basis, bconditions, body_force)
 {
-		
+    m_options.addReal("SurfaceTension", "Surface constant tension", 1.);
 }
-    
-	
 
 template<class T>
 void gsElasticityAssembler_elasticSurface<T>::assemble(const gsMultiPatch<T>& displacement)

@@ -21,6 +21,7 @@ int main(int argc, char* argv[]){
     std::string filename = ELAST_DATA_DIR"/cooks.xml";
     real_t youngsModulus = 240.565e6;
     real_t poissonsRatio = 0.4;
+    real_t surfaceTension = 1.;
     index_t numUniRef = 1;
     index_t numDegElev = 1;
     index_t numPlotPoints = 100;
@@ -55,14 +56,14 @@ int main(int argc, char* argv[]){
     // neumann BC
     gsConstantFunction<> f(625e4, 0., 2);
     // elasticSurface BC
-    gsConstantFunction<> surfaceTention(4., 1);
+    //gsConstantFunction<> surfaceTension(4., 1);
 
     // boundary conditions
     gsBoundaryConditions<> bcInfo;
     for (index_t d = 0; d < 2; ++d)
         bcInfo.addCondition(0,boundary::west,condition_type::dirichlet,nullptr,d);
     bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
-    bcInfo.addCondition(0, boundary::east, condition_type::robin, &surfaceTention);
+    bcInfo.addCondition(0, boundary::east, condition_type::robin, nullptr);
 
     // source function, rhs
     gsConstantFunction<> g(0.,0.,2);
@@ -74,7 +75,8 @@ int main(int argc, char* argv[]){
     // creating assembler
     gsElasticityAssembler_elasticSurface<real_t> assembler(geometry,basisDisplacement,bcInfo,g);
     assembler.options().setReal("YoungsModulus",youngsModulus);
-    assembler.options().setReal("PoissonsRatio",poissonsRatio);
+    assembler.options().setReal("PoissonsRatio", poissonsRatio);
+    assembler.options().setReal("SurfaceTension", surfaceTension);
     assembler.options().setInt("MaterialLaw",material_law::neo_hooke_ln);
     gsInfo << "Initialized system with " << assembler.numDofs() << " dofs.\n";
 

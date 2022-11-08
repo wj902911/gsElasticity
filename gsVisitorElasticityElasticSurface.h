@@ -28,6 +28,7 @@ public:
         rule = gsQuadrature::get(basisRefs.front(), options, patchSide.direction());
         // saving necessary info
         patch = patchIndex;
+        gamma = options.getReal("SurfaceTension");
         // resize containers for global indices
         globalIndices.resize(dim);
         blockNumbers.resize(dim);
@@ -37,7 +38,27 @@ public:
                          const gsGeometry<T>& geo,
                          const gsMatrix<T>& quNodes)
     {
-		
+        // store quadrature points of the element for geometry evaluation
+        md.points = quNodes;
+        // NEED_VALUE to get points in the physical domain for evaluation of the RHS
+        // NEED_MEASURE to get the Jacobian determinant values for integration
+        // NEED_GRAD_TRANSFORM to get the Jacobian matrix to transform gradient from the parametric to physical domain
+        md.flags = NEED_VALUE | NEED_MEASURE | NEED_GRAD_TRANSFORM;
+        // Compute image of the quadrature points plus gradient, jacobian and other necessary data
+        geo.computeMap(md);
+        // find local indices of the displacement basis functions active on the element
+        basisRefs.front().active_into(quNodes.col(0), localIndicesDisp);
+        N_D = localIndicesDisp.rows();
+        // Evaluate displacement basis functions and their derivatives on the element
+        basisRefs.front().evalAllDers_into(quNodes, 1, basisValuesDisp);
+        // Evaluate right-hand side at the image of the quadrature points
+        //pde_ptr->rhs()->eval_into(md.values[0], forceValues);
+        // store quadrature points of the element for displacement evaluation
+        mdDisplacement.points = quNodes;
+        // NEED_DERIV to compute deformation gradient
+        mdDisplacement.flags = NEED_DERIV;
+        // evaluate displacement gradient
+        displacement.patch(patch).computeMap(mdDisplacement);
     }
 
     inline void assemble(gsDomainIterator<T>& element,

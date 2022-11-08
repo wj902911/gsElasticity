@@ -10,16 +10,20 @@ class gsElasticityAssembler_elasticSurface : public gsElasticityAssembler<T>
 {
 		
 public:
+
+	typedef gsBaseAssembler<T> Base;
+
 	gsElasticityAssembler_elasticSurface(const gsMultiPatch<T>& patches,
 			                             const gsMultiBasis<T>& basis,
 			                             const gsBoundaryConditions<T>& bconditions,
 			                             const gsFunction<T>& body_force);
 		
-	
-		
 protected:
 	virtual void assemble(const gsMultiPatch<T>& displacement);
-		
+
+protected:
+	using Base::m_options;
+
 };
 
 }
