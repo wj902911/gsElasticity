@@ -45,6 +45,10 @@ void gsElasticityAssembler_elasticSurface<T>::assemble(const gsMultiPatch<T>& di
     }
 
     m_system.matrix().makeCompressed();
+
+    //gsInfo << gsMatrix<T>(m_system.matrix()) << std::endl;
+    //gsInfo << std::endl;
+
 }
 
 }

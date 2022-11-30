@@ -81,6 +81,10 @@ public:
         N_D = localIndicesDisp.rows();
         // Evaluate displacement basis functions and their derivatives on the element
         basisRefs.front().evalAllDers_into(quNodes,1,basisValuesDisp);
+        //gsInfo << basisValuesDisp[0] << std::endl;
+        //gsInfo << std::endl;
+        //gsInfo << basisValuesDisp[1] << std::endl;
+        //gsInfo << std::endl;
         // Evaluate right-hand side at the image of the quadrature points
         pde_ptr->rhs()->eval_into(md.values[0],forceValues);
         // store quadrature points of the element for displacement evaluation
@@ -105,6 +109,10 @@ public:
             transformGradients(md,q,basisValuesDisp[1],physGrad);
             // physical jacobian of displacemnt du/dx = du/dxi * dxi/dx
             physDispJac = mdDisplacement.jacobian(q)*(md.jacobian(q).cramerInverse());
+            //gsInfo << md.values[0] << std::endl;
+           // gsInfo << std::endl;
+            //gsInfo << md.values[1] << std::endl;
+            //gsInfo << std::endl;
             // deformation gradient F = I + du/dx
             F = I + physDispJac;
             // deformation jacobian J = det(F)
@@ -187,6 +195,9 @@ public:
         // push to global system
         system.pushToRhs(localRhs,globalIndices,blockNumbers);
         system.pushToMatrix(localMat,globalIndices,eliminatedDofs,blockNumbers,blockNumbers);
+
+        //gsInfo << localMat << std::endl;
+        //gsInfo << std::endl;
     }
 
 protected:

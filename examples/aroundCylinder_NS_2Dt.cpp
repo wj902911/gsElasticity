@@ -15,6 +15,8 @@
 
 using namespace gismo;
 
+#define M_PI 3.1415926
+
 void refineBoundaryLayer(gsMultiBasis<> & velocity, gsMultiBasis<> & pressure)
 {
     gsMatrix<> boxSouth(2,2);

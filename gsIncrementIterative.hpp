@@ -1,4 +1,4 @@
-/** @file gsIterative.hpp
+/** @file gsIncrementIterative.hpp
 
     @brief Implementation of gsElIterative.
 
@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include <gsElasticity/gsIterative.h>
+#include <gsElasticity/gsIncrementIterative.h>
 
 #include <gsElasticity/gsBaseAssembler.h>
 
@@ -25,9 +25,10 @@ namespace gismo
 {
 
 template <class T>
-gsIterative<T>::gsIterative(gsBaseAssembler<T> & assembler_)
+gsIncrementIterative<T>::gsIncrementIterative(gsBaseAssembler<T> & assembler_)
     : assembler(assembler_),
       m_options(defaultOptions())
+     // totalsolVector(totalsolVector_)
 {
     solVector.setZero(assembler.numDofs(),1);
     fixedDoFs = assembler.allFixedDofs();
@@ -37,7 +38,7 @@ gsIterative<T>::gsIterative(gsBaseAssembler<T> & assembler_)
 }
 
 template <class T>
-gsIterative<T>::gsIterative(gsBaseAssembler<T> & assembler_,
+gsIncrementIterative<T>::gsIncrementIterative(gsBaseAssembler<T> & assembler_,
                             const gsMatrix<T> & initFreeDoFs)
     : assembler(assembler_),
       solVector(initFreeDoFs),
@@ -49,7 +50,7 @@ gsIterative<T>::gsIterative(gsBaseAssembler<T> & assembler_,
 }
 
 template <class T>
-gsIterative<T>::gsIterative(gsBaseAssembler<T> & assembler_,
+gsIncrementIterative<T>::gsIncrementIterative(gsBaseAssembler<T> & assembler_,
                             const gsMatrix<T> & initFreeDoFs,
                             const std::vector<gsMatrix<T> > & initFixedDoFs)
     : assembler(assembler_),
@@ -61,7 +62,7 @@ gsIterative<T>::gsIterative(gsBaseAssembler<T> & assembler_,
 }
 
 template <class T>
-void gsIterative<T>::reset()
+void gsIncrementIterative<T>::reset()
 {
     m_status = working;
     numIterations = 0;
@@ -72,13 +73,13 @@ void gsIterative<T>::reset()
 }
 
 template <class T>
-gsOptionList gsIterative<T>::defaultOptions()
+gsOptionList gsIncrementIterative<T>::defaultOptions()
 {
     gsOptionList opt;
     /// linear solver
     opt.addInt("Solver","Linear solver to use",linear_solver::LU);
     /// stopping creteria
-    opt.addInt("MaxIters","Maximum number of iterations per loop",100);
+    opt.addInt("MaxIters","Maximum number of iterations per loop",50);
     opt.addReal("AbsTol","Absolute tolerance for the convergence cretiria",1e-12);
     opt.addReal("RelTol","Relative tolerance for the stopping criteria",1e-9);
     /// additional setting
@@ -88,11 +89,11 @@ gsOptionList gsIterative<T>::defaultOptions()
 }
 
 template <class T>
-void gsIterative<T>::solve()
+void gsIncrementIterative<T>::solve(gsMatrix<T> & totalsolVector)
 {
     while (m_status == working)
     {
-        if (!compute())
+        if (!compute(totalsolVector))
         {
             m_status = bad_solution;
             goto abort;
@@ -102,8 +103,12 @@ void gsIterative<T>::solve()
         if (residualNorm < m_options.getReal("AbsTol") ||
             updateNorm < m_options.getReal("AbsTol") ||
             residualNorm/initResidualNorm < m_options.getReal("RelTol") ||
-            updateNorm/initUpdateNorm < m_options.getReal("RelTol"))
+            updateNorm/initUpdateNorm < m_options.getReal("RelTol")){
             m_status = converged;
+            gsInfo<<"Ending"<<"\n";
+            gsInfo<<"Norms is "<<totalsolVector.norm()<<"\n";
+            gsInfo<<"Norms is "<<solVector.norm()<<"\n";
+            }
         else if (numIterations == m_options.getInt("MaxIters"))
             m_status = interrupted;
     }
@@ -114,13 +119,13 @@ void gsIterative<T>::solve()
 }
 
 template <class T>
-bool gsIterative<T>::compute()
+bool gsIncrementIterative<T>::compute(gsMatrix<T> & totalsolVector)
 {
     // update mode: set Dirichlet BC to zero after the first iteration
     if (numIterations == 1 && m_options.getInt("IterType") == iteration_type::update)
         assembler.homogenizeFixedDofs(-1);
 
-    if (!assembler.assemble(solVector,fixedDoFs))
+    if (!assembler.assemble(totalsolVector,fixedDoFs))
         return false;
 
     gsVector<T> solutionVector;
@@ -160,6 +165,7 @@ bool gsIterative<T>::compute()
         updateNorm = solutionVector.norm();
         residualNorm = assembler.rhs().norm();
         solVector += solutionVector;
+        totalsolVector += solutionVector;
         // update fixed degrees fo freedom at the first iteration only (they are zero afterwards)
         if (numIterations == 0)
             for (index_t d = 0; d < (index_t)(fixedDoFs.size()); ++d)
@@ -170,6 +176,7 @@ bool gsIterative<T>::compute()
         updateNorm = (solutionVector-solVector).norm();
         residualNorm = 1.; // residual is not defined
         solVector = solutionVector;
+        totalsolVector += solutionVector;
         // copy the fixed degrees of freedom
         if (numIterations == 0)
             fixedDoFs = assembler.allFixedDofs();
@@ -182,19 +189,11 @@ bool gsIterative<T>::compute()
     }
     numIterations++;
 
-
-    //gsInfo << gsMatrix<T>(assembler.matrix()) << std::endl;
-    //gsInfo << std::endl; 
-    //gsInfo << assembler.rhs() << std::endl;
-    //gsInfo << std::endl;
-    //gsInfo << solVector << std::endl;
-    //gsInfo << std::endl;
-
     return true;
 }
 
 template <class T>
-std::string gsIterative<T>::status()
+std::string gsIncrementIterative<T>::status()
 {
     std::string statusString;
     if (m_status == converged)
@@ -216,7 +215,7 @@ std::string gsIterative<T>::status()
 }
 
 template <class T>
-void gsIterative<T>::setFixedDofs(const std::vector<gsMatrix<T> > & ddofs)
+void gsIncrementIterative<T>::setFixedDofs(const std::vector<gsMatrix<T> > & ddofs)
 {
     GISMO_ENSURE(ddofs.size() >= fixedDoFs.size(), "Wrong size of the container with fixed DoFs: " + util::to_string(ddofs.size()) +
                  ". Must be at least: " + util::to_string(fixedDoFs.size()));
@@ -230,14 +229,14 @@ void gsIterative<T>::setFixedDofs(const std::vector<gsMatrix<T> > & ddofs)
 }
 
 template <class T>
-void gsIterative<T>::saveState()
+void gsIncrementIterative<T>::saveState()
 {
     solVecSaved = solVector;
     ddofsSaved = fixedDoFs;
 }
 
 template <class T>
-void gsIterative<T>::recoverState()
+void gsIncrementIterative<T>::recoverState()
 {
     GISMO_ASSERT(solVecSaved.rows() == solVector.rows(),"No state saved!");
     solVector = solVecSaved;
