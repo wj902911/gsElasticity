@@ -167,7 +167,8 @@ public:
 			}
             outerNormal(md, q, patchSide, unormal);
             const T weight = quWeights[q] * unormal.norm();
-            gsMatrix<T> der_ab = basisValuesDisp[1].reshapeCol(q, dim, basisValuesDisp[1].rows() / dim).row(!fixDir).transpose();
+            gsMatrix<T> der_ab = basisValuesDisp[1].reshapeCol(q, dim, basisValuesDisp[1].rows() / dim).transpose();
+            der_ab.removeCol(fixDir);
             //gsInfo << der_ab << std::endl;
             //gsInfo << std::endl;
             //gsInfo << quWeights[q] << std::endl;

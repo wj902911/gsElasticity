@@ -26,7 +26,8 @@ int main(int argc, char* argv[]){
     index_t numUniRef = 2;
     index_t numDegElev = 1;
     index_t numPlotPoints = 1000;
-	index_t numLoadSteps = 10;
+	index_t numLoadSteps = 100;
+    index_t maxIter = 100;
 
     // minimalistic user interface for terminal
     gsCmdLine cmd("This is Cook's membrane benchmark with nonlinear elasticity solver.");
@@ -34,6 +35,9 @@ int main(int argc, char* argv[]){
     cmd.addInt("r","refine","Number of uniform refinement application",numUniRef);
     cmd.addInt("d","degelev","Number of degree elevation application",numDegElev);
     cmd.addInt("s","point","Number of points to plot to Paraview",numPlotPoints);
+    cmd.addReal("t", "surfTen", "Constant surface tension", surfaceTension);
+    cmd.addInt("n", "numSteps", "Number of load steps", numLoadSteps);
+    cmd.addInt("m", "maxIter", "Max iteration number", maxIter);
     try { cmd.getValues(argc,argv); } catch (int rv) { return rv; }
 
     //=============================================//
@@ -90,7 +94,8 @@ int main(int argc, char* argv[]){
     gsIterative_multiStep<real_t> solver(assembler);
     solver.options().setInt("Verbosity",solver_verbosity::all);
     solver.options().setInt("Solver",linear_solver::LDLT);
-	
+    solver.options().setInt("MaxIters", maxIter);
+
     gsMultiPatch<> displacement;
     assembler.constructSolution(solver.solution(), solver.allFixedDofs(), displacement);
     gsPiecewiseFunction<> stresses;
@@ -123,7 +128,7 @@ int main(int argc, char* argv[]){
     gsInfo << "Solved the system in " << clock.stop() <<"s.\n";
     if (numPlotPoints > 0)
     {
-        gsWriteParaviewMultiPhysics(fields, "cooks_final", numPlotPoints);
+        //gsWriteParaviewMultiPhysics(fields, "cooks_final", numPlotPoints);
         collection.save();
         gsInfo << "Open \"cooks.pvd\" in Paraview for visualization.\n";
     }

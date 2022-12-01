@@ -25,6 +25,8 @@ int main(int argc, char* argv[])
     index_t numDegElev = 1;
     index_t numPlotPoints = 1000;
     index_t numLoadSteps = 10;
+    index_t maxIter = 100;
+	index_t numFrames = 10;
 
     // minimalistic user interface for terminal
     gsCmdLine cmd("This is Cook's membrane benchmark with nonlinear elasticity solver.");
@@ -32,7 +34,10 @@ int main(int argc, char* argv[])
     cmd.addInt("r", "refine", "Number of uniform refinement application", numUniRef);
     cmd.addInt("d", "degelev", "Number of degree elevation application", numDegElev);
     cmd.addInt("s", "point", "Number of points to plot to Paraview", numPlotPoints);
-    cmd.addReal("t", "surfTen", "constant surface tension", surfaceTension);
+    cmd.addReal("t", "surfTen", "Constant surface tension", surfaceTension);
+    cmd.addInt("n", "numSteps", "Number of load steps", numLoadSteps);
+    cmd.addInt("m", "maxIter", "Max iteration number", maxIter);
+    cmd.addInt("f", "frames", "Number of total output frames", numFrames);
     try { cmd.getValues(argc, argv); }
     catch (int rv) { return rv; }
 
@@ -57,10 +62,13 @@ int main(int argc, char* argv[])
     gsBoundaryConditions<> bcInfo;
     bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, 0);
     bcInfo.addCondition(0, boundary::south, condition_type::dirichlet, nullptr, 1);
-    bcInfo.addCondition(0, boundary::back, condition_type::dirichlet, nullptr, 2);
+    bcInfo.addCondition(0, boundary::front, condition_type::dirichlet, nullptr, 2);
     bcInfo.addCondition(0, boundary::east, condition_type::robin, nullptr);
     bcInfo.addCondition(0, boundary::north, condition_type::robin, nullptr);
-    bcInfo.addCondition(0, boundary::front, condition_type::robin, nullptr);
+    bcInfo.addCondition(0, boundary::back, condition_type::robin, nullptr);
+    // neumann BC
+    //gsConstantFunction<> f(1., 0., 0., 3);
+    //bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
 
     // source function, rhs
     gsConstantFunction<> g(0., 0., 0., 3);
@@ -80,6 +88,7 @@ int main(int argc, char* argv[])
     gsIterative_multiStep<real_t> solver(assembler);
     solver.options().setInt("Verbosity", solver_verbosity::all);
     solver.options().setInt("Solver", linear_solver::LDLT);
+    solver.options().setInt("MaxIters", maxIter);
 
     // constructing an IGA field (geometry + solution)
     gsMultiPatch<> displacement;
@@ -99,6 +108,9 @@ int main(int argc, char* argv[])
         gsWriteParaviewMultiPhysicsTimeStep(fields, "cube", collection, 0, numPlotPoints);
     
     gsInfo << "Solving...\n";
+    index_t numStepsPerFrame = numLoadSteps / numFrames;
+    index_t cs = 0;
+	index_t frame = 0;
     gsStopwatch clock;
     clock.restart();
     for (int i = 0; i < numLoadSteps; i++)
@@ -107,8 +119,13 @@ int main(int argc, char* argv[])
         solver.solve(numLoadSteps);
         assembler.constructSolution(solver.solution(), solver.allFixedDofs(), displacement);
         assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
-        if (numPlotPoints > 0)
-            gsWriteParaviewMultiPhysicsTimeStep(fields, "cube", collection, i + 1, numPlotPoints);
+        cs++;
+        if (numPlotPoints > 0 && cs == numStepsPerFrame)
+        {
+            frame++;
+            gsWriteParaviewMultiPhysicsTimeStep(fields, "cube", collection, frame, numPlotPoints);
+            cs = 0;
+        }
     }
     gsInfo << "Solved the system in " << clock.stop() << "s.\n";
     if (numPlotPoints > 0)
