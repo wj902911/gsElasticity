@@ -11,23 +11,23 @@
 
 using namespace gismo;
 
-int main(int argc, char* argv[])
-{
-    //=====================================//
-                // Input //
-    //=====================================//
-
-    std::string filename = ELAST_DATA_DIR"/cube.xml";
+int main(int argc, char* argv[]){
+	
+	//=====================================//
+				// Input //
+	//=====================================//
+	
+    std::string filename = ELAST_DATA_DIR"/lshape.xml";
     real_t youngsModulus = 2.8;
     real_t poissonsRatio = 0.4;
     real_t surfaceTension = 2;
-    index_t numUniRef = 2;
+    index_t numUniRef = 1;
     index_t numDegElev = 1;
     index_t numPlotPoints = 10000;
     index_t numLoadSteps = 100;
     index_t maxIter = 100;
-	index_t numFrames = 100;
-	
+    index_t numFrames = 100;
+
     // minimalistic user interface for terminal
     gsCmdLine cmd("This is Cook's membrane benchmark with nonlinear elasticity solver.");
     cmd.addReal("p", "poisson", "Poisson's ratio used in the material law", poissonsRatio);
@@ -44,7 +44,7 @@ int main(int argc, char* argv[])
     //=============================================//
         // Scanning geometry and creating bases //
     //=============================================//
-
+	
     gsMultiPatch<> geometry;
     gsReadFile<>(filename, geometry);
     // creating bases
@@ -57,26 +57,28 @@ int main(int argc, char* argv[])
     //=============================================//
         // Setting loads and boundary conditions //
     //=============================================//
-
+	
     // boundary conditions
     gsBoundaryConditions<> bcInfo;
-    bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, 0);
+    //bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, 0);
     bcInfo.addCondition(0, boundary::south, condition_type::dirichlet, nullptr, 1);
-    bcInfo.addCondition(0, boundary::front, condition_type::dirichlet, nullptr, 2);
     bcInfo.addCondition(0, boundary::east, condition_type::robin, nullptr);
     bcInfo.addCondition(0, boundary::north, condition_type::robin, nullptr);
-    bcInfo.addCondition(0, boundary::back, condition_type::robin, nullptr);
-    // neumann BC
-    //gsConstantFunction<> f(1., 0., 0., 3);
-    //bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
+    bcInfo.addCondition(1, boundary::south, condition_type::dirichlet, nullptr, 1);
+    bcInfo.addCondition(1, boundary::west, condition_type::dirichlet, nullptr, 0);
+    //bcInfo.addCondition(1, boundary::north, condition_type::robin, nullptr);
+    //bcInfo.addCondition(2, boundary::south, condition_type::dirichlet, nullptr, 1);
+    bcInfo.addCondition(2, boundary::west, condition_type::dirichlet, nullptr, 0);
+    bcInfo.addCondition(2, boundary::north, condition_type::robin, nullptr);
+    bcInfo.addCondition(2, boundary::east, condition_type::robin, nullptr);
 
     // source function, rhs
-    gsConstantFunction<> g(0., 0., 0., 3);
+    gsConstantFunction<> g(0., 0., 2);
 
     //=============================================//
                   // Solving & Ploting //
     //=============================================//
-
+	
     // creating assembler
     gsElasticityAssembler_elasticSurface<real_t> assembler(geometry, basisDisplacement, bcInfo, g);
     assembler.options().setReal("YoungsModulus", youngsModulus);
@@ -102,18 +104,18 @@ int main(int argc, char* argv[])
     fields["Displacement"] = &displacementField;
     fields["von Mises"] = &stressField;
     // paraview collection of time steps
-    gsParaviewCollection collection("cube");
+    gsParaviewCollection collection("lshape");
 
     if (numPlotPoints > 0)
     {
-        gsWriteParaviewMultiPhysicsTimeStep(fields, "cube", collection, 0, numPlotPoints);
-        gsWriteParaviewMultiPhysics(fields, "cube_mesh", numPlotPoints, 1, 0);
+        gsWriteParaviewMultiPhysicsTimeStep(fields, "lshape", collection, 0, numPlotPoints);
+        gsWriteParaviewMultiPhysics(fields, "lshape_mesh", numPlotPoints, 1, 0);
     }
-    
+	
     gsInfo << "Solving...\n";
     index_t numStepsPerFrame = numLoadSteps / numFrames;
     index_t cs = 0;
-	index_t frame = 0;
+    index_t frame = 0;
     gsStopwatch clock;
     clock.restart();
     for (int i = 0; i < numLoadSteps; i++)
@@ -126,7 +128,7 @@ int main(int argc, char* argv[])
         if (numPlotPoints > 0 && cs == numStepsPerFrame)
         {
             frame++;
-            gsWriteParaviewMultiPhysicsTimeStep(fields, "cube", collection, frame, numPlotPoints);
+            gsWriteParaviewMultiPhysicsTimeStep(fields, "lshape", collection, frame, numPlotPoints);
             cs = 0;
         }
     }
@@ -134,8 +136,8 @@ int main(int argc, char* argv[])
     if (numPlotPoints > 0)
     {
         collection.save();
-        gsInfo << "Open \"cube.pvd\" in Paraview for visualization.\n";
+        gsInfo << "Open \"lshape.pvd\" in Paraview for visualization.\n";
     }
-
+	
     return 0;
 }

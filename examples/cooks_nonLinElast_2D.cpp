@@ -22,8 +22,8 @@ int main(int argc, char* argv[]){
     std::string filename = ELAST_DATA_DIR"/cooks.xml";
     real_t youngsModulus = 2.8;
     real_t poissonsRatio = 0.4;
-    real_t surfaceTension = 2.;
-    index_t numUniRef = 2;
+    real_t surfaceTension = 2.0;
+    index_t numUniRef = 3;
     index_t numDegElev = 1;
     index_t numPlotPoints = 1000;
 	index_t numLoadSteps = 100;
@@ -47,13 +47,15 @@ int main(int argc, char* argv[]){
     // scanning geometry
     gsMultiPatch<> geometry;
     gsReadFile<>(filename, geometry);
-    //gsGeometry<> *pGeom = &geometry.patch(0);
     // creating bases
     gsMultiBasis<> basisDisplacement(geometry);
     for (index_t i = 0; i < numDegElev; ++i)
         basisDisplacement.degreeElevate();
     for (index_t i = 0; i < numUniRef; ++i)
         basisDisplacement.uniformRefine();
+
+    //gsGeometry<>* pGeom = &basisDisplacement;
+
 
     //=============================================//
         // Setting loads and boundary conditions //
@@ -103,15 +105,21 @@ int main(int argc, char* argv[]){
 
     // constructing an IGA field (geometry + solution)
     gsField<> displacementField(assembler.patches(), displacement);
+    //gsField<> meshAndCnet(displacement, displacement);
     gsField<> stressField(assembler.patches(), stresses, true);
     // creating a container to plot all fields to one Paraview file
     std::map<std::string, const gsField<>*> fields;
     fields["Displacement"] = &displacementField;
     fields["von Mises"] = &stressField;
+    //std::map<std::string, const gsField<>*> meshAndCnetfields;
+	//meshAndCnetfields["MeshAndCnet"] = &meshAndCnet;
     // paraview collection of time steps
     gsParaviewCollection collection("cooks");
     if (numPlotPoints > 0)
+    {
         gsWriteParaviewMultiPhysicsTimeStep(fields, "cooks", collection, 0, numPlotPoints);
+        gsWriteParaviewMultiPhysics(fields, "cooks_mesh", numPlotPoints, 1, 0);
+    }
 	
     gsInfo << "Solving...\n";
     gsStopwatch clock;
@@ -135,7 +143,7 @@ int main(int argc, char* argv[]){
 
     
 
-	//gsMesh<> mesh;
+	gsMesh<> mesh;
     //pGeom->controlNet(mesh);
 
     // validation

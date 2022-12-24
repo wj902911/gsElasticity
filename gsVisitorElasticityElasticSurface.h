@@ -2,6 +2,7 @@
 
 #include <gsAssembler/gsQuadrature.h>
 #include <gsCore/gsFuncData.h>
+#include <fstream>
 
 namespace gismo
 {
@@ -86,28 +87,11 @@ public:
         // loop over quadrature nodes
         for (index_t q = 0; q < quWeights.rows(); ++q)
         {
-            //calculate G_sub & g_sub, G_sub_1 & G_sub_2, g_sub_1 & g_sub_2 save in different columns in a single matrix.
-            //gsInfo << md.jacobian(q) << std::endl;
-            //gsInfo << std::endl;
             G_sub = md.jacobian(q);
             G_sub.removeCol(fixDir);
             g_sub = mdDisplacement.jacobian(q);
             g_sub.removeCol(fixDir);
-
-            /*
-            if (fixDir < dim - 1)
-            {
-                G_sub.block(0, fixDir, dim, dim - 1 - fixDir) = G_sub.block(0, fixDir + 1, dim, dim - 1 - fixDir);
-                g_sub.block(0, fixDir, dim, dim - 1 - fixDir) = g_sub.block(0, fixDir + 1, dim, dim - 1 - fixDir);
-            }
-            G_sub.conservativeResize(dim, dim - 1);
-            g_sub.conservativeResize(dim, dim - 1);
-            */
-            
-            
             g_sub += G_sub;
-            //gsInfo << g_sub << std::endl;
-            //gsInfo << std::endl;
             //calculate G_sub_alphaBeta and g_sub_alphaBeta.
             for (int i = 0; i < dim - 1; i++)
             {
@@ -136,8 +120,6 @@ public:
                 J = g_sub.norm() / G_sub.norm();
 				break;
             case 3:
-                //gsInfo << g_sub.col(0) << std::endl;
-                //gsInfo << g_sub.col(1) << std::endl;
                 const gsMatrix<T, 3, 1> g1 = g_sub.col(0);
                 const gsMatrix<T, 3, 1> g2 = g_sub.col(1);
                 const gsMatrix<T, 3, 1> G1 = G_sub.col(0);
@@ -147,8 +129,6 @@ public:
             }
 			//calculate Stress
             S_sup_ab = gamma * J * g_sup_ab;
-            //gsInfo << S_sup_ab << std::endl;
-            //gsInfo << std::endl;
             //calculate A
 			for (int a = 0; a < dim - 1; a++)
 			{
@@ -169,27 +149,13 @@ public:
             const T weight = quWeights[q] * unormal.norm();
             gsMatrix<T> der_ab = basisValuesDisp[1].reshapeCol(q, dim, basisValuesDisp[1].rows() / dim).transpose();
             der_ab.removeCol(fixDir);
-            //gsInfo << der_ab << std::endl;
-            //gsInfo << std::endl;
-            //gsInfo << quWeights[q] << std::endl;
-            //gsInfo << std::endl;
-            //gsInfo << unormal.norm() << std::endl;
-            //gsInfo << std::endl;
             //calculate local Mat
             for (index_t i = 0; i < N_D; i++)
             {
-                if (der_ab(i, 0) == 0)
-                {
-					continue;
-                }
                 for (index_t j = 0; j < N_D; j++)
                 {
                     gsMatrix<T> temp;
                     temp.setZero(dim, dim);
-                    if (der_ab(j, 0) == 0)
-                    {
-                        continue;
-                    }
                     for (int a = 0; a < dim - 1; a++)
                     {
                         for (int b = 0; b < dim - 1; b++)
@@ -208,12 +174,9 @@ public:
                         for (int b = 0; b < dim - 1; b++)
                         {
                             Eigen::MatrixXd Id = Eigen::MatrixXd::Identity(dim, dim);
-                            //gsInfo << S_sup_ab(a, b) * der_ab(j, a) * der_ab(i, b) * Id << std::endl;
                             temp += S_sup_ab(a, b) * der_ab(j, a) * der_ab(i, b) * Id;
                         }
                     }
-                    //gsInfo << temp << std::endl;
-                    //gsInfo << std::endl;
                     for (short_t di = 0; di < dim; ++di)
                         for (short_t dj = 0; dj < dim; ++dj)
                         {
@@ -232,16 +195,7 @@ public:
                     }
                 }
             }
-            
-            //gsInfo << localMat << std::endl;
-            //gsInfo << std::endl;
-            //gsInfo << localRhs << std::endl;
-            //gsInfo << std::endl;
         }
-        //gsInfo << localMat << std::endl;
-        //gsInfo << std::endl;
-        //gsInfo << localRhs << std::endl;
-        //gsInfo << std::endl;
     }
 
     inline void localToGlobal(const int patchIndex,
@@ -257,11 +211,6 @@ public:
         // push to global system
         system.pushToRhs(localRhs, globalIndices, blockNumbers);
         system.pushToMatrix(localMat, globalIndices, eliminatedDofs, blockNumbers, blockNumbers);
-
-        //gsInfo << system.matrix() << std::endl;
-        //gsInfo << std::endl;
-        //gsInfo << system.rhs() << std::endl;
-        //gsInfo << std::endl;
     }
 
 protected:
