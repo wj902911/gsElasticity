@@ -8,6 +8,7 @@
 #include <gsElasticity/gsIterative.h>
 #include <gsElasticity/gsIterative_multiStep.h>
 #include <gsElasticity/gsWriteParaviewMultiPhysics.h>
+#include <gsAssembler/gsAdaptiveRefUtils.h>
 
 using namespace gismo;
 
@@ -17,7 +18,8 @@ int main(int argc, char* argv[])
                 // Input //
     //=====================================//
 
-    std::string filename = ELAST_DATA_DIR"/cube.xml";
+    std::string filename = ELAST_DATA_DIR"/lshape2d_3patches_thb.xml";
+    index_t numRefinementLoops = 2;
     real_t youngsModulus = 2.8;
     real_t poissonsRatio = 0.4;
     real_t surfaceTension = 2;
@@ -48,6 +50,7 @@ int main(int argc, char* argv[])
     gsMultiPatch<> geometry;
     gsReadFile<>(filename, geometry);
     // creating bases
+    geometry.computeTopology();
     gsMultiBasis<> basisDisplacement(geometry);
     for (index_t i = 0; i < numDegElev; ++i)
         basisDisplacement.degreeElevate();
@@ -60,18 +63,87 @@ int main(int argc, char* argv[])
 
     // boundary conditions
     gsBoundaryConditions<> bcInfo;
-    bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, 0);
+    //bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, 0);
     bcInfo.addCondition(0, boundary::south, condition_type::dirichlet, nullptr, 1);
-    bcInfo.addCondition(0, boundary::front, condition_type::dirichlet, nullptr, 2);
     bcInfo.addCondition(0, boundary::east, condition_type::robin, nullptr);
     bcInfo.addCondition(0, boundary::north, condition_type::robin, nullptr);
-    bcInfo.addCondition(0, boundary::back, condition_type::robin, nullptr);
+    bcInfo.addCondition(1, boundary::south, condition_type::dirichlet, nullptr, 1);
+    bcInfo.addCondition(1, boundary::west, condition_type::dirichlet, nullptr, 0);
+    //bcInfo.addCondition(1, boundary::north, condition_type::robin, nullptr);
+    //bcInfo.addCondition(2, boundary::south, condition_type::dirichlet, nullptr, 1);
+    bcInfo.addCondition(2, boundary::west, condition_type::dirichlet, nullptr, 0);
+    bcInfo.addCondition(2, boundary::north, condition_type::robin, nullptr);
+    bcInfo.addCondition(2, boundary::east, condition_type::robin, nullptr);
     // neumann BC
     //gsConstantFunction<> f(1., 0., 0., 3);
     //bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
 
     // source function, rhs
-    gsConstantFunction<> g(0., 0., 0., 3);
+    gsConstantFunction<> g(0., 0., 2);
+
+    // --------------- set up adaptive refinement loop ---------------
+    // Specify cell-marking strategy...
+    MarkingStrategy adaptRefCrit = PUCA;
+    // ... and parameter.
+    const real_t adaptRefParam = 0.9;
+
+    // --------------- adaptive refinement loop ---------------
+    gsInfo << "Adaptive meshing...\n";
+    for (int refLoop = 0; refLoop <= numRefinementLoops; refLoop++)
+    {
+        // creating assembler
+        gsElasticityAssembler_elasticSurface<real_t> assembler(geometry, basisDisplacement, bcInfo, g);
+        assembler.options().setReal("YoungsModulus", youngsModulus);
+        assembler.options().setReal("PoissonsRatio", poissonsRatio);
+        assembler.options().setInt("MaterialLaw", material_law::neo_hooke_ln);
+        gsInfo << "Initialized system with " << assembler.numDofs() << " dofs.\n";
+
+        // setting Newton's method
+        gsIterative_multiStep<real_t> solver(assembler);
+        solver.options().setInt("Verbosity", solver_verbosity::all);
+        solver.options().setInt("Solver", linear_solver::LDLT);
+        solver.options().setInt("MaxIters", maxIter);
+
+        assembler.options().setReal("SurfaceTension", surfaceTension / numLoadSteps);
+        solver.solve(numLoadSteps);
+
+        gsMultiPatch<> displacement;
+        assembler.constructSolution(solver.solution(), solver.allFixedDofs(), displacement);
+        gsPiecewiseFunction<> stresses;
+        assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
+
+        //test for adp meshing
+        gsExprEvaluator<> ev;
+        ev.setIntegrationElements(assembler.multiBasis());
+        gsExprEvaluator<>::variable is = ev.getVariable(stresses);
+        ev.integralElWise(is);
+        const std::vector<real_t>& eltStress = ev.elementwise();
+        for (int i = 0; i < eltStress.size(); i++)
+            gsInfo << eltStress[i] << " ";
+        gsInfo << std::endl;
+
+        // --------------- adaptive refinement ---------------
+
+        //! [adaptRefinementPart]
+        // Mark elements for refinement, based on the computed local errors and
+        // the refinement-criterion and -parameter.
+        std::vector<bool> elMarked;
+        gsMarkElementsForRef(eltStress, adaptRefCrit, adaptRefParam, elMarked);
+        for (size_t k = 0; k != elMarked.size(); k++)  
+            gsInfo << " " << elMarked[k];
+        gsInfo << "\n";
+
+        // Refine the marked elements with a 1-ring of cells around marked elements
+        gsRefineMarkedElements(basisDisplacement, elMarked, 1);
+        //! [adaptRefinementPart]
+
+        //! [repairInterfaces]
+        // Call repair interfaces to make sure that the new meshes
+        // match along patch interfaces.
+        basisDisplacement.repairInterfaces(geometry.interfaces());
+        //! [repairInterfaces]
+    }
+
 
     //=============================================//
                   // Solving & Ploting //
@@ -109,7 +181,7 @@ int main(int argc, char* argv[])
         gsWriteParaviewMultiPhysicsTimeStep(fields, "cube", collection, 0, numPlotPoints);
         gsWriteParaviewMultiPhysics(fields, "cube_mesh", numPlotPoints, 1, 0);
     }
-    
+
     gsInfo << "Solving...\n";
     index_t numStepsPerFrame = numLoadSteps / numFrames;
     index_t cs = 0;
@@ -129,15 +201,6 @@ int main(int argc, char* argv[])
             gsWriteParaviewMultiPhysicsTimeStep(fields, "cube", collection, frame, numPlotPoints);
             cs = 0;
         }
-        //test for adp meshing
-        //gsExprEvaluator<> ev;
-        //ev.setIntegrationElements(assembler.multiBasis());
-        //gsExprEvaluator<>::variable is = ev.getVariable(stresses);
-        //ev.integralElWise(is);
-        //const std::vector<real_t>& eltStress = ev.elementwise();
-        //gsInfo << std::endl;
-        //for (int i = 0; i < eltStress.size(); i++)
-            //gsInfo << eltStress[i] << std::endl;
     }
     gsInfo << "Solved the system in " << clock.stop() << "s.\n";
     if (numPlotPoints > 0)
