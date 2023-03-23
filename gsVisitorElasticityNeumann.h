@@ -60,6 +60,8 @@ public:
         geo.computeMap(md);
         // Evaluate the Neumann functon on the images of the quadrature points
         neumannFunction_ptr->eval_into(md.values[0], neumannValues);
+        //gsInfo << md.values[0] << "\n\n";
+        //gsInfo << neumannValues << "\n\n";
         // find local indices of the displacement basis functions active on the element
         basisRefs.front().active_into(quNodes.col(0),localIndicesDisp);
         N_D = localIndicesDisp.rows();

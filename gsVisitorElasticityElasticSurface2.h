@@ -8,10 +8,10 @@ namespace gismo
 {
 	
 template <class T>
-class gsVisitorElasticityElasticSurface
+class gsVisitorElasticityElasticSurface2
 {
 public:
-    gsVisitorElasticityElasticSurface(const gsPde<T>& pde_, 
+    gsVisitorElasticityElasticSurface2(const gsPde<T>& pde_, 
                                       const gsMultiPatch<T>& displacement_,
                                       const boundary_condition<T>& s)
         : pde_ptr(static_cast<const gsBasePde<T>*>(&pde_)),
@@ -34,6 +34,7 @@ public:
         lambda = YM * PR / ((1. + PR) * (1. - 2. * PR));
         mu = YM / (2. * (1. + PR));
         gamma = options.getReal("SurfaceTension");
+        I = gsMatrix<T>::Identity(dim, dim);
         // resize containers for global indices
         globalIndices.resize(dim);
         blockNumbers.resize(dim);
@@ -54,11 +55,8 @@ public:
         // find local indices of the displacement basis functions active on the element
         basisRefs.front().active_into(quNodes.col(0), localIndicesDisp);
         N_D = localIndicesDisp.rows();
-		
         // Evaluate displacement basis functions and their derivatives on the element
         basisRefs.front().evalAllDers_into(quNodes, 1, basisValuesDisp);
-        //gsInfo << basisValuesDisp[1] << std::endl;
-        //gsInfo << std::endl;
         // Evaluate right-hand side at the image of the quadrature points
         //pde_ptr->rhs()->eval_into(md.values[0], forceValues);
         // store quadrature points of the element for displacement evaluation
@@ -79,18 +77,11 @@ public:
         g_sub_ab.setZero(dim - 1, dim - 1);
         G_sup.setZero(dim, dim - 1);
         g_sup.setZero(dim, dim - 1);
-        A_sup_abcd.resize(dim - 1, dim - 1);
-        for (int i = 0; i < dim - 1; i++)
-        {
-            for (int j = 0; j < dim - 1; j++)
-            {
-                A_sup_abcd(i, j).setZero(dim - 1, dim - 1);
-            }
-        }
         short_t fixDir = patchSide.direction();
         // loop over quadrature nodes
         for (index_t q = 0; q < quWeights.rows(); ++q)
         {
+
             G_sub = md.jacobian(q);
             G_sub.removeCol(fixDir);
             g_sub = mdDisplacement.jacobian(q);
@@ -100,26 +91,20 @@ public:
             G_sub_ab = G_sub.transpose() * G_sub;
             g_sub_ab = g_sub.transpose() * g_sub;
             //calculate G_sup_alphaBeta and g_sup_alphaBeta.
-            G_sup_ab = G_sub_ab.inverse();
-            g_sup_ab = g_sub_ab.inverse();
+            G_sup_ab = G_sub_ab.cramerInverse();
+            g_sup_ab = g_sub_ab.cramerInverse();
             //calculate G_sup & g_sup, G_sup_1 & G_sup_2, g_sup_1 & g_sup_2 save in different columns in a single matrix.
-            //G_sup.setZero();
-            //g_sup.setZero();
-            //for (int i = 0; i < dim - 1; i++)
-            //{
-                //for (int j = 0; j < dim - 1; j++)
-                //{
-                    //G_sup.col(i) += G_sup_ab(i, j) * G_sub.col(i);
-                    //g_sup.col(i) += g_sup_ab(i, j) * g_sub.col(i);
-                //}
-            //}
-            //gsInfo << G_sub << "\n\n";
-            //gsInfo << G_sup_ab << "\n\n";
-            //gsInfo << G_sup << "\n\n";
-            //G_sup = G_sub * G_sup_ab;
-            //gsInfo << G_sub << "\n\n";
-            //gsInfo << G_sup_ab << "\n\n";
-            //gsInfo << G_sup << "\n\n";
+            G_sup = G_sub * G_sup_ab;
+            g_sup = g_sub * g_sup_ab;
+            // Compute physical gradients of basis functions at q as a dim x numActiveFunction matrix
+            const index_t numGrads = basisValuesDisp[1].rows() / md.dim.first;
+            const gsAsConstMatrix<T> grads_kTemp(basisValuesDisp[1].col(q).data(), md.dim.first, numGrads);
+            gsMatrix<T> grads_k = grads_kTemp.transpose();
+            grads_k.removeCol(fixDir);
+            physGrad.noalias() = G_sup * grads_k.transpose();
+            // deformation gradient F, f
+            F = g_sub * G_sup.transpose();
+            f = G_sub * g_sup.transpose();
             //calculate Jacobian J.
 			switch(dim)
             {
@@ -134,73 +119,46 @@ public:
 				J = g1.cross(g2).norm() / G1.cross(G2).norm();
                 break;
             }
-			//calculate Stress
-            S_sup_ab = (lambda * log(J) + gamma * J) * g_sup_ab + mu * (G_sup_ab - g_sup_ab);
-            //calculate A
-			for (int a = 0; a < dim - 1; a++)
-			{
-				for (int b = 0; b < dim - 1; b++)
-				{
-					for (int c = 0; c < dim - 1; c++)
-					{
-                        for (int d = 0; d < dim - 1; d++)
-                        {
-                            A_sup_abcd(a, b)(c, d) = 
-                                  (lambda + gamma * J)               * (g_sup_ab(a, b) * g_sup_ab(c, d))
-                                - (lambda * log(J) - mu + gamma * J) * (g_sup_ab(a, c) * g_sup_ab(b, d) + g_sup_ab(a, d) * g_sup_ab(b, c));
-                        }
-					}
-				}
-			}
+            // Right Cauchy Green strain, C = F'*F
+            //RCG = F.transpose() * F;
+            // Inverse of Right Cauchy Green strain, C = f*f'
+            RCGinv = f * f.transpose();
             outerNormal(md, q, patchSide, unormal);
             const T weight = quWeights[q] * unormal.norm();
-            gsMatrix<T> der_ab = basisValuesDisp[1].reshapeCol(q, dim, basisValuesDisp[1].rows() / dim).transpose();
-            der_ab.removeCol(fixDir);
-            //calculate local Mat
+			//calculate Stress
+            S = (lambda * log(J) - mu + gamma * J) * RCGinv + mu * I;
+            // elasticity tensor
+            matrixTraceTensor<T>(C, RCGinv, RCGinv);
+            C *= lambda + gamma * J;
+            symmetricIdentityTensor<T>(Ctemp, RCGinv);
+            C += (mu - lambda * log(J) - gamma * J) * Ctemp;
+            // loop over active basis functions (u_i)
             for (index_t i = 0; i < N_D; i++)
             {
+                // Material tangent K_tg_mat = B_i^T * C * B_j;
+                setB<T>(B_i, F, physGrad.col(i));
+                materialTangentTemp = B_i.transpose() * C;
+                // Geometric tangent K_tg_geo = gradB_i^T * S * gradB_j;
+                geometricTangentTemp = S * physGrad.col(i);
+                // loop over active basis functions (v_j)
                 for (index_t j = 0; j < N_D; j++)
                 {
-                    gsMatrix<T> temp;
-                    temp.setZero(dim, dim);
-                    for (int a = 0; a < dim - 1; a++)
-                    {
-                        for (int b = 0; b < dim - 1; b++)
-                        {
-                            for (int c = 0; c < dim - 1; c++)
-                            {
-                                for (int d = 0; d < dim - 1; d++)
-                                {
-                                    temp += A_sup_abcd(c, b)(a, d) * g_sub.col(c) * g_sub.col(d).transpose() * der_ab(j, a) * der_ab(i, b);
-                                }
-                            }
-                        }
-                    }
-                    for (int a = 0; a < dim - 1; a++)
-                    {
-                        for (int b = 0; b < dim - 1; b++)
-                        {
-                            Eigen::MatrixXd Id = Eigen::MatrixXd::Identity(dim, dim);
-                            temp += S_sup_ab(a, b) * der_ab(j, a) * der_ab(i, b) * Id;
-                        }
-                    }
+                    setB<T>(B_j, F, physGrad.col(j));
+                    materialTangent = materialTangentTemp * B_j;
+                    T geometricTangent = geometricTangentTemp.transpose() * physGrad.col(j);
+                    // K_tg = K_tg_mat + I*K_tg_geo;
+                    for (short_t d = 0; d < dim; ++d)
+                        materialTangent(d, d) += geometricTangent;
                     for (short_t di = 0; di < dim; ++di)
                         for (short_t dj = 0; dj < dim; ++dj)
-                        {
-                            localMat(di * N_D + i, dj * N_D + j) += weight * temp(di, dj);
-                        }
+                            localMat(di * N_D + i, dj * N_D + j) += weight * materialTangent(di, dj);
                 }
-            }
-            //calculate local RHS
-            for (short_t d = 0; d < dim; ++d)
-            {
-                for (short_t a = 0; a < dim - 1; ++a)
-                {
-                    for (short_t b = 0; b < dim - 1; ++b)
-                    {
-                        localRhs.middleRows(d * N_D, N_D).noalias() -= weight * S_sup_ab(a, b) * g_sub(d, b) * der_ab.col(a);
-                    }
-                }
+                // Second Piola-Kirchhoff stress tensor as vector
+                voigtStress<T>(Svec, S);
+                // rhs = -r = force - B*Svec,
+                localResidual = B_i.transpose() * Svec;
+                for (short_t d = 0; d < dim; d++)
+                    localRhs(d * N_D + i) -= weight * localResidual(d);
             }
         }
     }
@@ -246,9 +204,8 @@ protected:
     // evaluation data of the current displacement field
     gsMapData<T> mdDisplacement;
     // all temporary matrices defined here for efficiency
-	gsMatrix<T> G_sub, g_sub, G_sup, g_sup, G_sub_ab, g_sub_ab, G_sup_ab, g_sup_ab, S_sup_ab;
-    gsVector<T> unormal;
-	gsMatrix<gsMatrix<T>> A_sup_abcd;
+    gsMatrix<T> I, C, Ctemp, physGrad, F, f, RCGinv, B_i, materialTangentTemp, B_j, materialTangent, S, G_sub, g_sub, G_sup, g_sup, G_sub_ab, g_sub_ab, G_sup_ab, g_sup_ab, S_sup_ab;
+    gsVector<T> unormal, geometricTangentTemp, Svec, localResidual;
 	
     // containers for global indices
     std::vector< gsMatrix<index_t> > globalIndices;

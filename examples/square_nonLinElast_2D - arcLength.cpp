@@ -4,6 +4,9 @@
 ///
 /// Author: A.Shamanskiy (2016 - ...., TU Kaiserslautern)
 #include <gismo.h>
+#include <gsStructuralAnalysis/gsALMBase.h>
+#include <gsStructuralAnalysis/gsALMCrisfield.h>
+
 #include <gsElasticity/gsElasticityAssembler_elasticSurface.h>
 #include <gsElasticity/gsIterative.h>
 #include <gsElasticity/gsIterative_multiStep.h>
@@ -81,13 +84,12 @@ int main(int argc, char* argv[]){
         //bcInfo.addCornerValue(boundary::northwest, 0, 0, d);
         //bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, d);
     //}
-    //bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
+    bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
     //bcInfo.addCondition(0, boundary::east, condition_type::dirichlet, &d, 1);
     bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, 0);
     bcInfo.addCondition(0, boundary::south, condition_type::dirichlet, nullptr, 1);
-    //bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
     //bcInfo.addCondition(0, boundary::south, condition_type::robin, nullptr);
-    bcInfo.addCondition(0, boundary::east, condition_type::robin, nullptr);
+    //bcInfo.addCondition(0, boundary::east, condition_type::robin, nullptr);
 
     // source function, rhs
     gsConstantFunction<> g(0.,0.,2);
@@ -106,6 +108,17 @@ int main(int argc, char* argv[]){
     assembler.options().setInt("MaterialLaw",material_law::neo_hooke_ln);
     gsInfo << "Initialized system with " << assembler.numDofs() << " dofs.\n";
 
+    std::vector<gsMatrix<> > fixedDofs = assembler.allFixedDofs();
+    typedef std::function<gsSparseMatrix<real_t>(gsVector<real_t> const&)>                                Jacobian_t;
+    typedef std::function<gsVector<real_t>(gsVector<real_t> const&, real_t, gsVector<real_t> const&) >   ALResidual_t;
+    Jacobian_t Jacobian = [&assembler, &fixedDofs](gsVector<real_t> const& x)
+    {
+        assembler.assemble(x, fixedDofs);
+
+        gsSparseMatrix<real_t> m = assembler.matrix();
+        // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
+        return m;
+    };
     // setting Newton's method
     //gsIterative<real_t> solver(assembler);
     gsIterative_multiStep<real_t> solver(assembler);

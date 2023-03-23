@@ -5,5 +5,5 @@
 
 namespace gismo
 {
-    CLASS_TEMPLATE_INST gsElasticityAssembler_elasticSurface<real_t>;
+    CLASS_TEMPLATE_INST gsElasticityAssemblerElasticSurface<real_t>;
 }
