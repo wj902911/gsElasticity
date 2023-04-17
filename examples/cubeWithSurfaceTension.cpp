@@ -21,8 +21,8 @@ int main(int argc, char* argv[])
     std::string filename = ELAST_DATA_DIR"/cube.xml";
     real_t youngsModulus = 1.0;
     real_t poissonsRatio = 0.4;
-    real_t surfaceTension = 0;
-    index_t numUniRef = 0;
+    real_t surfaceTension = 2;
+    index_t numUniRef = 2;
     index_t numDegElev = 1;
     index_t numPlotPoints = 1000;
     index_t numLoadSteps = 1;
@@ -145,6 +145,15 @@ int main(int argc, char* argv[])
             gsWriteHistoryOutputBoundaryResults(fields2, file1, "Reactions", boundary::east, 10);
             cs = 0;
         }
+        //test for adp meshing
+        //gsExprEvaluator<> ev;
+        //ev.setIntegrationElements(assembler.multiBasis());
+        //gsExprEvaluator<>::variable is = ev.getVariable(stresses);
+        //ev.integralElWise(is);
+        //const std::vector<real_t>& eltStress = ev.elementwise();
+        //gsInfo << std::endl;
+        //for (int i = 0; i < eltStress.size(); i++)
+            //gsInfo << eltStress[i] << std::endl;
     }
     gsInfo << "Solved the system in " << clock.stop() << "s.\n";
 

@@ -50,7 +50,8 @@ void gsCauchyStressFunctionExtension<T>::nonLinearElastic(const gsMatrix<T> & u,
     for (index_t q = 0; q < u.cols(); ++q)
     {
         // deformation gradient F = I + gradU*gradGeo^-1
-        if (mdGeo.jacobian(q).determinant() <= 0)
+        //if (mdGeo.jacobian(q).determinant() <= 0)
+        if (mdGeo.jacobian(q).determinant() < 0)
             gsInfo << "Invalid domain parametrization: J = " << mdGeo.jacobian(q).determinant() <<
                       " at point (" << u.col(q).transpose() << ") of patch " << m_patch << std::endl;
         if (abs(mdGeo.jacobian(q).determinant()) > 1e-20)

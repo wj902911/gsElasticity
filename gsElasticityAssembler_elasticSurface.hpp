@@ -2,6 +2,14 @@
 
 #include <gsElasticity/gsElasticityAssembler_elasticSurface.h>
 
+#include <gsUtils/gsPointGrid.h>
+#include <gsElasticity/gsBaseUtils.h>
+#include <gsElasticity/gsGeoUtils.h>
+#include <gsElasticity/gsBasePde.h>
+
+#include <gsElasticity/gsVisitorLinearElasticity.h>
+#include <gsElasticity/gsVisitorMixedLinearElasticity.h>
+#include <gsElasticity/gsVisitorMixedNonLinearElasticity.h>
 #include <gsElasticity/gsVisitorNonLinearElasticity.h>
 #include <gsElasticity/gsVisitorElasticityNeumann.h>
 #include <gsElasticity/gsVisitorElasticityElasticSurface.h>
@@ -47,6 +55,70 @@ void gsElasticityAssemblerElasticSurface<T>::constructCauchyStressesExtension(co
 }
 
 template<class T>
+void gsElasticityAssemblerElasticSurface<T>::assemble(bool saveEliminationMatrix)
+{
+    m_system.matrix().setZero();
+    reserve();
+    m_system.rhs().setZero();
+
+    // Compute volumetric integrals and write to the global linear system
+    if (m_bases.size() == unsigned(m_dim)) // displacement formulation
+    {
+        GISMO_ENSURE(m_options.getInt("MaterialLaw") == material_law::hooke,
+            "Material law not specified OR not supported!");
+        if (saveEliminationMatrix)
+        {
+            eliminationMatrix.resize(Base::numDofs(), Base::numFixedDofs());
+            eliminationMatrix.setZero();
+            eliminationMatrix.reservePerColumn(m_system.numColNz(m_bases[0], m_options));
+        }
+
+        gsVisitorLinearElasticity<T> visitor(*m_pde_ptr, saveEliminationMatrix ? &eliminationMatrix : nullptr);
+        Base::template push<gsVisitorLinearElasticity<T> >(visitor);
+
+        if (saveEliminationMatrix)
+        {
+            Base::rhsWithZeroDDofs = m_system.rhs();
+            eliminationMatrix.makeCompressed();
+        }
+
+    }
+    else // mixed formulation (displacement + pressure)
+    {
+        GISMO_ENSURE(m_options.getInt("MaterialLaw") == material_law::mixed_hooke,
+            "Material law not specified OR not supported!");
+        gsVisitorMixedLinearElasticity<T> visitor(*m_pde_ptr);
+        Base::template push<gsVisitorMixedLinearElasticity<T> >(visitor);
+    }
+
+    // Compute surface integrals and write to the global rhs vector
+    Base::template push<gsVisitorElasticityNeumann<T> >(m_pde_ptr->bc().neumannSides());
+
+    m_system.matrix().makeCompressed();
+}
+
+template <class T>
+bool gsElasticityAssemblerElasticSurface<T>::assemble(const gsMatrix<T>& solutionVector,
+    const std::vector<gsMatrix<T> >& fixedDoFs)
+{
+    gsMultiPatch<T> displacement;
+    constructSolution(solutionVector, fixedDoFs, displacement);
+    if (m_options.getSwitch("Check"))
+        if (checkDisplacement(m_pde_ptr->patches(), displacement) != -1)
+            return false;
+
+    if (m_bases.size() == unsigned(m_dim)) // displacement formulation 
+        assemble(displacement);
+    else // mixed formulation (displacement + pressure)
+    {
+        gsMultiPatch<T> pressure;
+        constructPressure(solutionVector, fixedDoFs, pressure);
+        assemble(displacement, pressure);
+    }
+    return true;
+}
+
+template<class T>
 void gsElasticityAssemblerElasticSurface<T>::assemble(const gsMultiPatch<T>& displacement)
 {
     GISMO_ENSURE(m_options.getInt("MaterialLaw") == material_law::saint_venant_kirchhoff ||
@@ -75,6 +147,27 @@ void gsElasticityAssemblerElasticSurface<T>::assemble(const gsMultiPatch<T>& dis
     //gsInfo << gsMatrix<T>(m_system.matrix()) << std::endl;
     //gsInfo << std::endl;
 
+}
+
+template<class T>
+void gsElasticityAssemblerElasticSurface<T>::assemble(const gsMultiPatch<T>& displacement,
+    const gsMultiPatch<T>& pressure)
+{
+    GISMO_ENSURE(m_options.getInt("MaterialLaw") == material_law::mixed_neo_hooke_ln,
+        "Material law not specified OR not supported!");
+    m_options.setInt("MaterialLaw", material_law::mixed_neo_hooke_ln);
+    m_system.matrix().setZero();
+    reserve();
+    m_system.rhs().setZero();
+
+    // Compute volumetric integrals and write to the global linear systemz
+    gsVisitorMixedNonLinearElasticity<T> visitor(*m_pde_ptr, displacement, pressure);
+    Base::template push<gsVisitorMixedNonLinearElasticity<T> >(visitor);
+    // Compute surface integrals and write to the global rhs vector
+    // change to reuse rhs from linear system
+    Base::template push<gsVisitorElasticityNeumann<T> >(m_pde_ptr->bc().neumannSides());
+
+    m_system.matrix().makeCompressed();
 }
 
 }

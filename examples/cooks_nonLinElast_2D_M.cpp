@@ -4,9 +4,6 @@
 ///
 /// Author: A.Shamanskiy (2016 - ...., TU Kaiserslautern)
 #include <gismo.h>
-#include <gsStructuralAnalysis/gsALMBase.h>
-#include <gsStructuralAnalysis/gsALMCrisfield.h>
-
 #include <gsElasticity/gsElasticityAssembler_elasticSurface.h>
 #include <gsElasticity/gsIterative.h>
 #include <gsElasticity/gsIterative_multiStep.h>
@@ -23,17 +20,17 @@ int main(int argc, char* argv[]){
                 // Input //
     //=====================================//
 
-    std::string filename = ELAST_DATA_DIR"/square.xml";
+    std::string filename = ELAST_DATA_DIR"/plateWithHole.xml";
     real_t youngsModulus = 10.0;
     real_t poissonsRatio = 0.4;
     real_t surfaceTension = 1.0;
     real_t surfaceYoungsModulus = 0.0;
     real_t surfacePoissonsRatio = 0.4;
     index_t numUniRef = 0;
-    index_t numDegElev = 1;
+    index_t numDegElev = 0;
     index_t numPlotPoints = 1000;
     index_t numLoadSteps = 20;
-    index_t numPreSteps = 10;
+    //index_t numPreSteps = 10;
     index_t maxIter = 100;
 
     // minimalistic user interface for terminal
@@ -69,9 +66,9 @@ int main(int argc, char* argv[]){
     //=============================================//
 
     // neumann BC
-    //gsConstantFunction<> f(0., 0., 2);
+    gsConstantFunction<> f(0., 0., 2);
 	// displacement BC
-    gsConstantFunction<> f(0.1, 2);
+    //gsConstantFunction<> f(0.1, 2);
     //gsConstantFunction<> d(-2.7e-3, 2);
     // elasticSurface BC
     //gsConstantFunction<> surfaceTension(4., 1);
@@ -84,10 +81,11 @@ int main(int argc, char* argv[]){
         //bcInfo.addCornerValue(boundary::northwest, 0, 0, d);
         //bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, d);
     //}
-    bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
+    //bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
     //bcInfo.addCondition(0, boundary::east, condition_type::dirichlet, &d, 1);
     bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, 0);
     bcInfo.addCondition(0, boundary::south, condition_type::dirichlet, nullptr, 1);
+    bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
     //bcInfo.addCondition(0, boundary::south, condition_type::robin, nullptr);
     //bcInfo.addCondition(0, boundary::east, condition_type::robin, nullptr);
 
@@ -108,17 +106,6 @@ int main(int argc, char* argv[]){
     assembler.options().setInt("MaterialLaw",material_law::neo_hooke_ln);
     gsInfo << "Initialized system with " << assembler.numDofs() << " dofs.\n";
 
-    std::vector<gsMatrix<> > fixedDofs = assembler.allFixedDofs();
-    typedef std::function<gsSparseMatrix<real_t>(gsVector<real_t> const&)>                                Jacobian_t;
-    typedef std::function<gsVector<real_t>(gsVector<real_t> const&, real_t, gsVector<real_t> const&) >   ALResidual_t;
-    Jacobian_t Jacobian = [&assembler, &fixedDofs](gsVector<real_t> const& x)
-    {
-        assembler.assemble(x, fixedDofs);
-
-        gsSparseMatrix<real_t> m = assembler.matrix();
-        // gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
-        return m;
-    };
     // setting Newton's method
     //gsIterative<real_t> solver(assembler);
     gsIterative_multiStep<real_t> solver(assembler);
@@ -149,60 +136,57 @@ int main(int argc, char* argv[]){
     // paraview collection of time steps
     std::string filenameParaview = "square_" + util::to_string(numUniRef) + "_" + util::to_string(youngsModulus) + "_" + util::to_string(surfaceYoungsModulus) + "_";
     gsParaviewCollection collection(filenameParaview);
-    std::string file1 = "Reactions.txt";
+    std::string file1 = "traction.txt";
+    std::string file2 = "displacement.txt";
     std::ofstream of;
     if (numPlotPoints > 0)
     {
         gsWriteParaviewMultiPhysicsTimeStepWithMesh(fields, filenameParaview, collection, 0, numPlotPoints,true);
-
+        gsWriteParaviewMultiPhysics(fields, "ControlNet", numPlotPoints, false, true);
         of.open(file1);
+        of << "0\n";
+        of.close();
+
+        of.open(file2);
         of << "0\n";
         of.close();
 		
         //gsWriteParaviewMultiPhysics(fields, filenameParaview + "mesh", numPlotPoints, 1, 0);
     }
-	
+#if 0
     gsInfo << "Solving...\n";
     gsStopwatch clock;
     clock.restart();
-    for (int i = 0; i < numPreSteps; i++)
+    for (int i = 0; i < numLoadSteps; i++)
     {
-        assembler.options().setReal("SurfaceTension", (i + 1) * surfaceTension / numPreSteps);
-        //const gsVector<real_t> val = Eigen::Vector2d(0.5 / numLoadSteps * (i + 1), 0.0);
-		//f.setValue(val, 2);
+        //assembler.options().setReal("SurfaceTension", (i + 1) * surfaceTension / numLoadSteps);
+        const gsVector<real_t> val = Eigen::Vector2d(1.61646 / numLoadSteps * (i + 1), 0.0);
+		f.setValue(val, 2);
         //assembler.refresh();
         solver.solve(numLoadSteps);
         assembler.constructSolution(solver.solution(), solver.allFixedDofs(), displacement);
-        gsInfo << solver.solution() << "\n\n";
         assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
         assembler.constructCauchyStressesExtension(displacement, reactions, boundary::east, stress_components::all_2D_vector);
         if (numPlotPoints > 0)
         {
             gsWriteParaviewMultiPhysicsTimeStepWithMesh(fields, filenameParaview, collection, i + 1, numPlotPoints, true);
-            gsWriteHistoryOutputBoundaryResults(fields2, file1, "Reactions", boundary::east, 10);
+            //gsWriteHistoryOutputBoundaryResults(fields2, file1, "Reactions", boundary::east, 10);
+			
+			of.open(file1, std::ios_base::app);
+            of << val(0) << "0\n";
+            of.close();
+			
+            gsMatrix<> A(2, 1);
+            A << 1., 1.;
+            A = displacement.patch(0).eval(A);
+			
+            of.open(file2, std::ios_base::app);
+            of << A.at(0) << "\n";
+            of.close();
         }
     }
-	
-    bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, f, 0);
-
-    for (int i = numPreSteps; i < numLoadSteps; i++)
-    {
-        //const gsVector<real_t> val = Eigen::Vector2d(0.5 / numLoadSteps * (i + 1), 0.0);
-        //f.setValue(val, 2);
-        assembler.refresh();
-        solver.solve(numLoadSteps);
-        assembler.constructSolution(solver.solution(), solver.allFixedDofs(), displacement);
-        gsInfo << solver.solution() << "\n\n";
-        assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
-        assembler.constructCauchyStressesExtension(displacement, reactions, boundary::east, stress_components::all_2D_vector);
-        if (numPlotPoints > 0)
-        {
-            gsWriteParaviewMultiPhysicsTimeStepWithMesh(fields, filenameParaview, collection, i + 1, numPlotPoints, true);
-            gsWriteHistoryOutputBoundaryResults(fields2, file1, "Reactions", boundary::east, 10);
-        }
-    }
-	
     gsInfo << "Solved the system in " << clock.stop() <<"s.\n";
+#endif
     if (numPlotPoints > 0)
     {
         //gsWriteParaviewMultiPhysics(fields, "cooks_final", numPlotPoints);
@@ -210,17 +194,8 @@ int main(int argc, char* argv[]){
         gsInfo << "Open \"square.pvd\" in Paraview for visualization.\n";
     }
 
-    
-
-	gsMesh<> mesh;
-    //pGeom->controlNet(mesh);
-
     // validation
-    gsMatrix<> A(2,1);
-    A << 1.,1.;
-    A = displacement.patch(0).eval(A);
-    gsInfo << "X-displacement of the top-right corner: " << A.at(0) << std::endl;
-    gsInfo << "Y-displacement of the top-right corner: " << A.at(1) << std::endl;
+    
 
     return 0;
 }

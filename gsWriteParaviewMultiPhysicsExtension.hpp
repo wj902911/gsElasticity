@@ -53,7 +53,7 @@ void gsWriteParaviewMultiPhysicsTimeStepWithMesh(
             const gsBasis<>& dom = fields.begin()->second->isParametrized() ?
                 fields.begin()->second->igaFunction(p - numP).basis() : fields.begin()->second->patch(p - numP).basis();
 
-            gsWriteParaviewMultiPhysicsSingleMesh(fields, p - numP, fn + util::to_string(time) + "_" + util::to_string(p) + "_mesh", 1);
+            gsWriteParaviewMultiPhysicsSingleMesh(fields, p - numP, fn + util::to_string(time) + "_" + util::to_string(p) + "_mesh", 4);
             collection.addTimestep(fileName + util::to_string(time), p, time, "_mesh.vtp");
         }
     }

@@ -4,6 +4,8 @@
 ///
 /// Author: A.Shamanskiy (2016 - ...., TU Kaiserslautern)
 #include <gismo.h>
+#include <gsStructuralAnalysis/gsALMBase.h>
+#include <gsStructuralAnalysis/gsALMCrisfield.h>
 #include <gsElasticity/gsElasticityAssembler_elasticSurface.h>
 #include <gsElasticity/gsIterative.h>
 #include <gsElasticity/gsIterative_multiStep.h>
@@ -42,6 +44,7 @@ int main(int argc, char* argv[])
 #else
 	real_t surfaceTension = 0.0;
 #endif // USE_SURFACE_TENSION
+
 	real_t surfaceYoungsModulus = 0.0;
 	real_t surfacePoissonsRatio = 0.4;
 
@@ -53,21 +56,34 @@ int main(int argc, char* argv[])
 	
 	
 	//solver
-#define DISPCONTROL 0
-#define FIX_INNER_SURFACE 0
-#if DISPCONTROL
-	real_t maxDisp = -0.07;
+	
+	real_t maxLoad = 10.0;
+#ifdef USE_SURFACE_TENSION
+	index_t numPreStep = 10;
 #else
-	real_t maxLoad = 3.5;
-#endif
-	//index_t numPreStep = 10;
-	index_t numLoadSteps = 50;
-	index_t maxIter = 50;
+	index_t numPreStep = 0;
+#endif // USE_SURFACE_TENSION
+	index_t numLoadSteps = 400;
+	index_t maxIter = 15;
 
 	//plot
 	bool meshPlot = true;
-	index_t numFrames = 50;
+	index_t numFrames = 400;
 	index_t numPlotPoints = 1000;
+	
+	//AL
+	real_t dL = 0.05; // General arc length
+	real_t dLb = 0.05; // Ard length to find bifurcation
+	bool adaptive = true;
+	real_t tau = 1e4;
+	real_t tol = 1e-6;
+	real_t tolU = 1e-6;
+	real_t tolF = 1e-3;
+	real_t relax = 1.0;
+
+	bool quasiNewton = false;
+	int quasiNewtonInt = -1;
+	bool SingularPoint = false;
 
 	// minimalistic user interface for terminal
 	gsCmdLine cmd("This is Cook's membrane benchmark with nonlinear elasticity solver.");
@@ -260,35 +276,12 @@ int main(int argc, char* argv[])
 			bcInfo.addCondition(i, boundary::front, condition_type::robin, nullptr);
 	}
 
-#if DISPCONTROL
-#if FIX_INNER_SURFACE
-	for (int i = 0; i < geometry.nPatches(); i++)
-	{
-		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, nullptr, 0);
-		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, nullptr, 1);
-		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, nullptr, 2);
-	}
-#else
-	real_t dispValue = maxDisp / numLoadSteps;
-	gsFunctionExpr<> dispX(util::to_string(dispValue) + "*x/" + util::to_string(ir), 3);
-	gsFunctionExpr<> dispY(util::to_string(dispValue) + "*y/" + util::to_string(ir), 3);
-	gsFunctionExpr<> dispZ(util::to_string(dispValue) + "*z/" + util::to_string(ir), 3);
-	for (int i = 0; i < geometry.nPatches(); i++)
-	{
-		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, &dispX, 0);
-		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, &dispY, 1);
-		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, &dispZ, 2);
-	}
-#endif
-#else
 	// neumann BC
-	gsFunctionExpr<> traction("10*x/0.1", "10*y/0.1", "10*z/0.1", 3);
+	gsFunctionExpr<> traction("0.0", "0.0", "0.0", 3);
 	bcInfo.addCondition(0, boundary::front, condition_type::neumann, &traction);
 	bcInfo.addCondition(1, boundary::front, condition_type::neumann, &traction);
 	bcInfo.addCondition(2, boundary::front, condition_type::neumann, &traction);
-#endif
 	
-
 
 	// source function, rhs
 	gsConstantFunction<> g(0., 0., 0., 3);
@@ -316,30 +309,31 @@ int main(int argc, char* argv[])
 	gsPiecewiseFunction<> stresses;
 	assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
 	gsField<> stressField(assembler.patches(), stresses, true);
-	gsPiecewiseFunction<> reaction;
-	assembler.constructCauchyStressesExtension(displacement, reaction, boundary::front, stress_components::normal_3D_vector);
-	gsField<> reactionField(assembler.patches(), reaction, true);
+	//gsPiecewiseFunction<> reaction;
+	//assembler.constructCauchyStressesExtension(displacement, reaction, boundary::front, stress_components::normal_3D_vector);
+	//gsField<> reactionField(assembler.patches(), reaction, true);
 	
 	// creating a container to plot all fields to one Paraview file
 	std::map<std::string, const gsField<>*> fields;
-	std::map<std::string, const gsField<>*> fields2;
+	//std::map<std::string, const gsField<>*> fields2;
 	fields["Displacement"] = &displacementField;
 	fields["von Mises"] = &stressField;
-	fields2["Reaction"] = &reactionField;
+	//fields2["Reaction"] = &reactionField;
 	//fields["CauchyStressTensor"] = &stressField;
 	// paraview collection of time steps
-	std::string filenameParaview = "Cavitation_" + util::to_string(numUniRef) + "_" + util::to_string(youngsModulus) + "_" + util::to_string(poissonsRatio) + "_" + util::to_string(rMax) + "_";
+	std::string filenameParaview = "Cavitation_ALM_" + util::to_string(numUniRef) + "_" + util::to_string(youngsModulus) + "_" + util::to_string(poissonsRatio) + "_" + util::to_string(rMax) + "_";
 	gsParaviewCollection collection(filenameParaview);
 
-#if DISPCONTROL
-	std::string file1 = "disp.txt";
-#else
 	std::string file1 = "traction.txt";
-#endif
-	std::string file2 = "InSurfEvDisp.txt";
-	//std::string file2 = "InSurfEvTraction.txt";
-	//std::string file2 = "ouSurfEvDisp.txt";
-	std::string file3 = "InSurfEvTraction.txt";
+	
+	std::string file2 = "InSurfEvDisp_corner_mid.txt";
+	std::string file3 = "InSurfEvDisp_mid_mid.txt";
+	std::string file4 = "InSurfEvDisp_corner_bot.txt";
+	std::string file5 = "InSurfEvDisp_corner_right.txt";
+	std::string file6 = "InSurfEvDisp_corner_corner.txt";
+	//std::string file3 = "InSurfEvTraction.txt";
+	//std::string file3 = "ouSurfEvDisp.txt";
+	//std::string file3 = "InSurfEvTraction.txt";
 	//std::ofstream of_traction(file1);
 	//std::ofstream of_inSurfEvDisp(file2);
 	std::ofstream of;
@@ -359,71 +353,212 @@ int main(int argc, char* argv[])
 		of.open(file3);
 		of << "0\n";
 		of.close();
+
+		of.open(file4);
+		of << "0\n";
+		of.close();
+
+		of.open(file5);
+		of << "0\n";
+		of.close();
+
+		of.open(file6);
+		of << "0\n";
+		of.close();
 	}
 #if 1
-	gsInfo << "Solving...\n";
+	gsInfo << "Solving for surface tension\n";
 	index_t numStepsPerFrame = numLoadSteps / numFrames;
 	index_t cs = 0;
 	index_t frame = 0;
 	gsStopwatch clock;
 	clock.restart();
 	
-	for (int i = 0; i < numLoadSteps; i++)
+	for (int i = 0; i < numPreStep; i++)
 	{
-		gsInfo << "Step " << i + 1 << " of " << numLoadSteps;
-#if DISPCONTROL
-#if FIX_INNER_SURFACE
-		real_t totalDisp = 0;
-		assembler.options().setReal("SurfaceTension", (i + 1) * surfaceTension / numLoadSteps);
-#else
-		real_t totalDisp = dispValue * (i + 1);
-#endif
-		of.open(file1, std::ios_base::app);
-		of << totalDisp <<"\n";
-		of.close();
-		//dispX = gsFunctionExpr<>(util::to_string(dispValue) + "*x/" + util::to_string(ir), 3);
-		//dispY = gsFunctionExpr<>(util::to_string(dispValue) + "*y/" + util::to_string(ir), 3);
-		//dispZ = gsFunctionExpr<>(util::to_string(dispValue) + "*z/" + util::to_string(ir), 3);
-#else
-		real_t tracValue = maxLoad / numLoadSteps * (i + 1);
-		gsInfo << " with traction: " << tracValue << "\n";
-		of.open(file1, std::ios_base::app);
-		of << tracValue << "\n";
-		of.close();
-		traction = gsFunctionExpr<>(
-			util::to_string(tracValue) + "*x/" + util::to_string(ir),
-			util::to_string(tracValue) + "*y/" + util::to_string(ir),
-			util::to_string(tracValue) + "*z/" + util::to_string(ir), 3);
-#endif
 		
-		assembler.refresh();
-		solver.solve(numLoadSteps);
-
-#if 1
-		gsSparseSolver<>::SimplicialLDLT LDLTsolver(assembler.matrix());
-		gsVector<> stabilityVec = LDLTsolver.vectorD();
-		real_t stability = stabilityVec.colwise().minCoeff()[0];
-		gsInfo << "Stability = " << stability << "\n";
-#endif
-
+		assembler.options().setReal("SurfaceTension", (i + 1) * surfaceTension / numPreStep);
+		solver.solve(numPreStep);
 		assembler.constructSolution(solver.solution(), solver.allFixedDofs(), displacement);
 		assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
-		assembler.constructCauchyStressesExtension(displacement, reaction, boundary::front, stress_components::normal_3D_vector);
+		//assembler.constructCauchyStressesExtension(displacement, reaction, boundary::front, stress_components::normal_3D_vector);
 		cs++;
 		//assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
 		if (numPlotPoints > 0 && cs == numStepsPerFrame)
 		{
 			frame++;
 			gsWriteParaviewMultiPhysicsTimeStepWithMesh(fields, filenameParaview, collection, frame, numPlotPoints, meshPlot);
-			gsWriteHistoryOutputBoundaryResults(fields, file2, "Displacement", boundary::front, 100);
-			gsWriteHistoryOutputBoundaryResults(fields2, file3, "Reaction", boundary::front, 100);
+			//gsWriteHistoryOutputBoundaryResults(fields, file2, "Displacement", boundary::front, 100);
+			//gsWriteHistoryOutputBoundaryResults(fields2, file3, "Reaction", boundary::front, 100);
 			//gsWriteHistoryOutputBoundaryResults(fields, file3, "Displacement", boundary::back, 100);
 			cs = 0;
 		}
 	}
 #endif
 	gsInfo << "Solved the system in " << clock.stop() << "s.\n";
-	//delete basis;
+
+	traction = gsFunctionExpr<>(
+		util::to_string(maxLoad) + "*x/" + util::to_string(ir),
+		util::to_string(maxLoad) + "*y/" + util::to_string(ir),
+		util::to_string(maxLoad) + "*z/" + util::to_string(ir), 3);
+	//real_t tracValue = maxLoad / numLoadSteps * (i + 1);
+	//of.open(file1, std::ios_base::app);
+	//of << tracValue << "\n";
+	//of.close();
+	
+	real_t time = 0.0;
+	
+	std::vector<gsMatrix<> > fixedDofs = assembler.allFixedDofs();
+	typedef std::function<gsSparseMatrix<real_t>(gsVector<real_t> const&)>                                Jacobian_t;
+	typedef std::function<gsVector<real_t>(gsVector<real_t> const&, real_t, gsVector<real_t> const&) >   ALResidual_t;
+	Jacobian_t Jacobian = [&time, &clock, &assembler, &fixedDofs](gsVector<real_t> const& x)
+	{
+		clock.restart();
+		assembler.assemble(x, fixedDofs);
+		time += clock.stop();
+
+		gsSparseMatrix<real_t> m = assembler.matrix();
+		// gsInfo<<"matrix = \n"<<m.toDense()<<"\n";
+		return m;
+	};
+	// Function for the Residual
+	ALResidual_t ALResidual = [&time, &clock, &assembler, &fixedDofs](gsVector<real_t> const& x, real_t lam, gsVector<real_t> const& force)
+	{
+		clock.restart();
+		assembler.assemble(x, fixedDofs);
+		gsVector<real_t> Fint = -(assembler.rhs() - force);
+		gsVector<real_t> result = Fint - lam * force;
+		time += clock.stop();
+		return result; // - lam * force;
+	};
+	// Assemble linear system to obtain the force vector
+	assembler.options().setInt("MaterialLaw", material_law::hooke);
+	assembler.assemble();
+	gsVector<> Force = assembler.rhs();
+	//gsInfo << Force << "\n\n";
+	assembler.options().setInt("MaterialLaw", material_law::neo_hooke_ln);
+	gsALMBase<real_t>* arcLength;
+	arcLength = new gsALMCrisfield<real_t>(Jacobian, ALResidual, Force);
+	
+	arcLength->options().setString("Solver", "SimplicialLDLT"); // LDLT solver
+	arcLength->options().setInt("BifurcationMethod", 0); // 0: determinant, 1: eigenvalue
+	arcLength->options().setReal("Length", dLb);
+	arcLength->options().setInt("AngleMethod", 0); // 0: step, 1: iteration
+	arcLength->options().setSwitch("AdaptiveLength", adaptive);
+	arcLength->options().setInt("AdaptiveIterations", 6);
+	arcLength->options().setReal("MaxLength", dLb);
+	arcLength->options().setReal("Perturbation", tau);
+	arcLength->options().setReal("Scaling", 1.0);
+	arcLength->options().setReal("Tol", tol);
+	arcLength->options().setReal("TolU", tolU);
+	arcLength->options().setReal("TolF", tolF);
+	arcLength->options().setInt("MaxIter", maxIter);
+	arcLength->options().setSwitch("Verbose", true);
+	arcLength->options().setReal("Relaxation", relax);
+	if (quasiNewtonInt > 0)
+	{
+		quasiNewton = true;
+		arcLength->options().setInt("QuasiIterations", quasiNewtonInt);
+	}
+	arcLength->options().setSwitch("Quasi", quasiNewton);
+	arcLength->applyOptions();
+	arcLength->initialize();
+	
+	gsMatrix<> solVector = arcLength->solutionU();
+	real_t Lold = 0;
+	gsMatrix<> Uold = solver.solution();
+	real_t indicator = 0.0;
+	arcLength->setIndicator(indicator); // RESET INDICATOR
+	bool bisected = false;
+	real_t dLb0 = dLb;
+	arcLength->setSolution(Uold, Lold);
+	
+	for (index_t k = numPreStep; k < numLoadSteps; k++)
+	{
+		gsInfo << "Load step " << k << "\n";
+		arcLength->step();
+
+		if (!(arcLength->converged()))
+		{
+			gsInfo << "Error: Loop terminated, arc length method did not converge.\n";
+			real_t currentLength = arcLength->getLength();
+			//dLb = dLb / 2.;
+			arcLength->setLength(currentLength / 2.);
+			arcLength->setSolution(Uold, Lold);
+			bisected = true;
+			k -= 1;
+			continue;
+		}
+
+		if (SingularPoint)
+		{
+			arcLength->computeStability(arcLength->solutionU(), quasiNewton);
+			if (arcLength->stabilityChange())
+			{
+				gsInfo << "Bifurcation spotted!" << "\n";
+				arcLength->computeSingularPoint(1e-4, 5, Uold, Lold, 1e-10, 1e-1, false);
+				arcLength->switchBranch();
+				dLb0 = dLb = dL;
+				arcLength->setLength(dLb);
+			}
+		}
+
+		indicator = arcLength->indicator();
+		solVector = arcLength->solutionU();
+		Uold = solVector;
+		//gsInfo << Uold << "\n\n";
+		Lold = arcLength->solutionL();
+		//gsInfo << Lold << "\n\n";
+		assembler.constructSolution(solVector, fixedDofs, displacement);
+		assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
+		//assembler.constructCauchyStressesExtension(displacement, reaction, boundary::front, stress_components::normal_3D_vector);
+
+		gsInfo << "Total ellapsed assembly time: " << time << " s\n";
+
+		if (numPlotPoints > 0)
+		{
+			gsWriteParaviewMultiPhysicsTimeStepWithMesh(fields, filenameParaview, collection, k + 1, numPlotPoints, true);
+			//gsWriteHistoryOutputBoundaryResults(fields, file2, "Displacement", boundary::front, 100);
+			//gsWriteHistoryOutputBoundaryResults(fields, file3, "Displacement", boundary::back, 100);
+			//gsWriteHistoryOutputBoundaryResults(fields2, file3, "Reaction", boundary::front, 100);
+
+			of.open(file1, std::ios_base::app);
+			of << Lold * maxLoad << "\n";
+			of.close();
+
+			gsMatrix<> A(3, 1);
+			A << 1., 1., 0.;
+			A = displacement.patch(0).eval(A);
+			of.open(file2, std::ios_base::app);
+			of << math::sqrt(math::pow(A.at(0),2)+ math::pow(A.at(1), 2)+ math::pow(A.at(2), 2)) << "\n";
+			of.close();
+
+			A << .5, .5, 0.;
+			A = displacement.patch(0).eval(A);
+			of.open(file3, std::ios_base::app);
+			of << math::sqrt(math::pow(A.at(0), 2) + math::pow(A.at(1), 2) + math::pow(A.at(2), 2)) << "\n";
+			of.close();
+
+			A << .5, 0., 0.;
+			A = displacement.patch(0).eval(A);
+			of.open(file4, std::ios_base::app);
+			of << math::sqrt(math::pow(A.at(0), 2) + math::pow(A.at(1), 2) + math::pow(A.at(2), 2)) << "\n";
+			of.close();
+
+			A << 0., .5, 0.;
+			A = displacement.patch(0).eval(A);
+			of.open(file5, std::ios_base::app);
+			of << math::sqrt(math::pow(A.at(0), 2) + math::pow(A.at(1), 2) + math::pow(A.at(2), 2)) << "\n";
+			of.close();
+
+			A << 0., 0., 0.;
+			A = displacement.patch(0).eval(A);
+			of.open(file6, std::ios_base::app);
+			of << math::sqrt(math::pow(A.at(0), 2) + math::pow(A.at(1), 2) + math::pow(A.at(2), 2)) << "\n";
+			of.close();
+		}
+	}
+	
 	if (numPlotPoints > 0)
 	{
 		collection.save();

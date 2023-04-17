@@ -12,14 +12,6 @@
 
 using namespace gismo;
 
-gsMatrix<real_t> generateRotationMatrix(real_t angle, gsVector<real_t> rotationAxis)
-{
-	gsMatrix<real_t> rotationMatrix(3, 3);
-	rotationMatrix << cos(angle) + rotationAxis[0] * rotationAxis[0] * (1 - cos(angle)), rotationAxis[0] * rotationAxis[1] * (1 - cos(angle)) - rotationAxis[2] * sin(angle), rotationAxis[0] * rotationAxis[2] * (1 - cos(angle)) + rotationAxis[1] * sin(angle),
-		rotationAxis[1] * rotationAxis[0] * (1 - cos(angle)) + rotationAxis[2] * sin(angle), cos(angle) + rotationAxis[1] * rotationAxis[1] * (1 - cos(angle)), rotationAxis[1] * rotationAxis[2] * (1 - cos(angle)) - rotationAxis[0] * sin(angle),
-		rotationAxis[2] * rotationAxis[0] * (1 - cos(angle)) - rotationAxis[1] * sin(angle), rotationAxis[2] * rotationAxis[1] * (1 - cos(angle)) + rotationAxis[0] * sin(angle), cos(angle) + rotationAxis[2] * rotationAxis[2] * (1 - cos(angle));
-	return rotationMatrix;
-}
 
 int main(int argc, char* argv[])
 {
@@ -34,19 +26,20 @@ int main(int argc, char* argv[])
 
 	//material
 	real_t youngsModulus = 1.0;
-	real_t poissonsRatio = 0.4;
-//#define USE_SURFACE_TENSION
+	real_t poissonsRatio = 0.495;
+#define USE_SURFACE_TENSION
 #ifdef USE_SURFACE_TENSION
-	real_t GA_Gr = 10.;
-	real_t surfaceTension = GA_Gr * youngsModulus / 2. / (1. + poissonsRatio) * ir;
+	//real_t GA_Gr = 10.;
+	//real_t surfaceTension = GA_Gr * youngsModulus / 2. / (1. + poissonsRatio) * ir;
+	real_t surfaceTension = 0.6;
 #else
 	real_t surfaceTension = 0.0;
 #endif // USE_SURFACE_TENSION
-	real_t surfaceYoungsModulus = 0.0;
-	real_t surfacePoissonsRatio = 0.4;
+	real_t surfaceYoungsModulus = 0.001;
+	real_t surfacePoissonsRatio = 0.495;
 
 	//mesh
-	index_t numUniRef = 2;
+	index_t numUniRef = 3;
 	index_t numDegElev = 0;
 	//index_t numRadialElems = 25;
 	//index_t numDegRedu = 1;
@@ -56,17 +49,23 @@ int main(int argc, char* argv[])
 #define DISPCONTROL 0
 #define FIX_INNER_SURFACE 0
 #if DISPCONTROL
-	real_t maxDisp = -0.07;
+	real_t maxDisp = 4;
 #else
-	real_t maxLoad = 3.5;
+	real_t maxLoad = 3.0;
 #endif
-	//index_t numPreStep = 10;
+#ifdef USE_SURFACE_TENSION
+	index_t numPreStep = 20;
 	index_t numLoadSteps = 50;
-	index_t maxIter = 50;
+	index_t numFrames = numLoadSteps;
+#else
+	index_t numPreStep = 0;
+	index_t numLoadSteps = 30;
+	index_t numFrames = 30;
+#endif // USE_SURFACE_TENSION
+	index_t maxIter = 15;
 
 	//plot
 	bool meshPlot = true;
-	index_t numFrames = 50;
 	index_t numPlotPoints = 1000;
 
 	// minimalistic user interface for terminal
@@ -135,26 +134,26 @@ int main(int argc, char* argv[])
 	C3.setZero();
 	W3.setZero();
 
-	gsVector<real_t> rotAxis(3);
-	rotAxis << sqrt(3.) / 3., sqrt(3.) / 3., sqrt(3.) / 3.;
+	//gsVector<real_t> rotAxis(3);
+	//rotAxis << sqrt(3.) / 3., sqrt(3.) / 3., sqrt(3.) / 3.;
 	
-	real_t t8 = tan(M_PI / 8.);
-	real_t c8 = cos(M_PI / 8.);
-	real_t c = atan(sqrt(1. / 6.) / sqrt(1. / 3.)) / 2.;
-	real_t cc = cos(c);
-	real_t tc = tan(c);
+	//real_t t8 = tan(M_PI / 8.);
+	//real_t c8 = cos(M_PI / 8.);
+	//real_t c = atan(sqrt(1. / 6.) / sqrt(1. / 3.)) / 2.;
+	//real_t cc = cos(c);
+	//real_t tc = tan(c);
 	real_t s12 = sqrt(1. / 2.);
-	real_t s13 = sqrt(1. / 3.);
-	real_t t = 1.158274940799;
-	real_t X22 = 0.86385240 * t;
-	real_t Y22 = 0.35620151 * t;
-	real_t Z22 = 0.35620151 * t;
-	real_t W22 = 0.86787082728344185507434880283629;
+	//real_t s13 = sqrt(1. / 3.);
+	//real_t t = 1.158274940799;
+	//real_t X22 = 0.86385240 * t;
+	//real_t Y22 = 0.35620151 * t;
+	//real_t Z22 = 0.35620151 * t;
+	//real_t W22 = 0.86787082728344185507434880283629;
 	
 	W1 << 
-		1., c8, 1.,
-		c8, W22, cc,
-		1., cc, 1.;
+		1., s12, 1.,
+		s12, 0.5, s12,
+		1., s12, 1.;
 	W2 << W1;
 	
 	for (int i = 0; i < numKnotInsert; i++)
@@ -166,10 +165,10 @@ int main(int argc, char* argv[])
 	
 	//1
 	CTemp <<
-		 1., 0.,  0.,  1.,  t8,  0., s12, s12,   0,
-		 1., 0.,  t8, X22, Y22, Z22, s12, s12,  tc,
-		s12, 0., s12, s12,  tc, s12, s13, s13, s13;
-	
+		1., 0., 0., 1., 1., 0., 0., 1., 0,
+		1., 0., 1., 1., 1., 1., 0., 1., 1.,
+		0., 0., 1., 0., 0., 1., 0., 0., 1.;
+
 	C1 << CTemp * rMax;
 	C2 << CTemp * ir;
 	for (int i = 0; i < numKnotInsert; i++)
@@ -184,7 +183,7 @@ int main(int argc, char* argv[])
 	C.col(2).array() += z;
 	gsTensorNurbs<3, real_t> patch1(KV1, KV2, KV3, C, W);
 
-#if 1
+#if 0
 	//2
 	gsMatrix<real_t> rotMat = generateRotationMatrix(M_PI * 2. / 3., rotAxis);
 	C << C2 * rotMat.transpose(), C3* rotMat.transpose(), C1* rotMat.transpose();
@@ -202,8 +201,8 @@ int main(int argc, char* argv[])
 #endif
 	gsMultiPatch<> geometry;
 	geometry.addPatch(patch1);
-	geometry.addPatch(patch2);
-	geometry.addPatch(patch3);
+	//geometry.addPatch(patch2);
+	//geometry.addPatch(patch3);
 	//gsInfo << patch1 << "\n\n";
 	//gsInfo << patch2 << "\n\n";
 
@@ -249,12 +248,13 @@ int main(int argc, char* argv[])
 	gsBoundaryConditions<> bcInfo;
 	bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, 1);
 	bcInfo.addCondition(0, boundary::south, condition_type::dirichlet, nullptr, 2);
-	bcInfo.addCondition(1, boundary::west, condition_type::dirichlet, nullptr, 2);
-	bcInfo.addCondition(1, boundary::south, condition_type::dirichlet, nullptr, 0);
-	bcInfo.addCondition(2, boundary::west, condition_type::dirichlet, nullptr, 0);
-	bcInfo.addCondition(2, boundary::south, condition_type::dirichlet, nullptr, 1);
+	bcInfo.addCondition(0, boundary::east, condition_type::dirichlet, nullptr, 0);
+	//bcInfo.addCondition(1, boundary::west, condition_type::dirichlet, nullptr, 2);
+	//bcInfo.addCondition(1, boundary::south, condition_type::dirichlet, nullptr, 0);
+	//bcInfo.addCondition(2, boundary::west, condition_type::dirichlet, nullptr, 0);
+	//bcInfo.addCondition(2, boundary::south, condition_type::dirichlet, nullptr, 1);
 
-	if (surfaceTension > 0)
+	if (surfaceTension > 0 || surfaceYoungsModulus > 0)
 	{
 		for (int i = 0; i < geometry.nPatches(); i++)
 			bcInfo.addCondition(i, boundary::front, condition_type::robin, nullptr);
@@ -282,10 +282,10 @@ int main(int argc, char* argv[])
 #endif
 #else
 	// neumann BC
-	gsFunctionExpr<> traction("10*x/0.1", "10*y/0.1", "10*z/0.1", 3);
+	gsFunctionExpr<> traction("0.0", "0.0", "0.0", 3);
 	bcInfo.addCondition(0, boundary::front, condition_type::neumann, &traction);
-	bcInfo.addCondition(1, boundary::front, condition_type::neumann, &traction);
-	bcInfo.addCondition(2, boundary::front, condition_type::neumann, &traction);
+	//bcInfo.addCondition(1, boundary::front, condition_type::neumann, &traction);
+	//bcInfo.addCondition(2, boundary::front, condition_type::neumann, &traction);
 #endif
 	
 
@@ -316,16 +316,16 @@ int main(int argc, char* argv[])
 	gsPiecewiseFunction<> stresses;
 	assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
 	gsField<> stressField(assembler.patches(), stresses, true);
-	gsPiecewiseFunction<> reaction;
-	assembler.constructCauchyStressesExtension(displacement, reaction, boundary::front, stress_components::normal_3D_vector);
-	gsField<> reactionField(assembler.patches(), reaction, true);
+	//gsPiecewiseFunction<> reaction;
+	//assembler.constructCauchyStressesExtension(displacement, reaction, boundary::front, stress_components::normal_3D_vector);
+	//gsField<> reactionField(assembler.patches(), reaction, true);
 	
 	// creating a container to plot all fields to one Paraview file
 	std::map<std::string, const gsField<>*> fields;
 	std::map<std::string, const gsField<>*> fields2;
 	fields["Displacement"] = &displacementField;
 	fields["von Mises"] = &stressField;
-	fields2["Reaction"] = &reactionField;
+	//fields2["Reaction"] = &reactionField;
 	//fields["CauchyStressTensor"] = &stressField;
 	// paraview collection of time steps
 	std::string filenameParaview = "Cavitation_" + util::to_string(numUniRef) + "_" + util::to_string(youngsModulus) + "_" + util::to_string(poissonsRatio) + "_" + util::to_string(rMax) + "_";
@@ -335,11 +335,15 @@ int main(int argc, char* argv[])
 	std::string file1 = "disp.txt";
 #else
 	std::string file1 = "traction.txt";
+	std::string file2 = "InSurfEvDisp_m.txt";
+	std::string file3 = "InSurfEvDisp_cr.txt";
+	std::string file4 = "InSurfEvDisp_cl.txt";
+	std::string file5 = "InSurfEvDisp_ct.txt";
 #endif
-	std::string file2 = "InSurfEvDisp.txt";
+	
 	//std::string file2 = "InSurfEvTraction.txt";
 	//std::string file2 = "ouSurfEvDisp.txt";
-	std::string file3 = "InSurfEvTraction.txt";
+	std::string file6 = "InSurfEvTraction.txt";
 	//std::ofstream of_traction(file1);
 	//std::ofstream of_inSurfEvDisp(file2);
 	std::ofstream of;
@@ -352,6 +356,7 @@ int main(int argc, char* argv[])
 		gsWriteParaviewMultiPhysicsTimeStepWithMesh(fields, filenameParaview, collection, 0, numPlotPoints, meshPlot);
 		//gsWriteParaviewMultiPhysics(fields, filenameParaview + "mesh", numPlotPoints, 1, 0);
 		
+#if !DISPCONTROL
 		of.open(file2);
 		of << "0\n";
 		of.close();
@@ -359,8 +364,38 @@ int main(int argc, char* argv[])
 		of.open(file3);
 		of << "0\n";
 		of.close();
+
+		of.open(file4);
+		of << "0\n";
+		of.close();
+
+		of.open(file5);
+		of << "0\n";
+		of.close();
+#endif
+
+		of.open(file6);
+		of << "0\n";
+		of.close();
 	}
 #if 1
+	Eigen::VectorXd SurfaceTensionValue;
+	SurfaceTensionValue.resize(numPreStep);
+	//numPreStep = 12;
+	SurfaceTensionValue(0) = 0.2;
+	SurfaceTensionValue(1) = 0.4;
+	SurfaceTensionValue(2) = 0.68;
+	for (int i = 3; i < numPreStep; i++)
+		SurfaceTensionValue(i) = SurfaceTensionValue(i - 1) + 0.001;
+	gsInfo << SurfaceTensionValue.transpose() << "\n";
+	Eigen::VectorXd tracValues;
+	tracValues.resize(numLoadSteps- numPreStep);
+	tracValues(0) = 0.1;
+	tracValues(1) = 0.2;
+	tracValues(2) = 0.3;
+	for (int i = 0; i < tracValues.size() - 3; i++)
+		tracValues(i + 3) = tracValues(i + 2) + 0.1;
+	gsInfo << tracValues.transpose() << "\n";
 	gsInfo << "Solving...\n";
 	index_t numStepsPerFrame = numLoadSteps / numFrames;
 	index_t cs = 0;
@@ -377,6 +412,7 @@ int main(int argc, char* argv[])
 		assembler.options().setReal("SurfaceTension", (i + 1) * surfaceTension / numLoadSteps);
 #else
 		real_t totalDisp = dispValue * (i + 1);
+		gsInfo << " with displacement: " << totalDisp << "\n";
 #endif
 		of.open(file1, std::ios_base::app);
 		of << totalDisp <<"\n";
@@ -385,15 +421,29 @@ int main(int argc, char* argv[])
 		//dispY = gsFunctionExpr<>(util::to_string(dispValue) + "*y/" + util::to_string(ir), 3);
 		//dispZ = gsFunctionExpr<>(util::to_string(dispValue) + "*z/" + util::to_string(ir), 3);
 #else
-		real_t tracValue = maxLoad / numLoadSteps * (i + 1);
-		gsInfo << " with traction: " << tracValue << "\n";
-		of.open(file1, std::ios_base::app);
-		of << tracValue << "\n";
-		of.close();
-		traction = gsFunctionExpr<>(
-			util::to_string(tracValue) + "*x/" + util::to_string(ir),
-			util::to_string(tracValue) + "*y/" + util::to_string(ir),
-			util::to_string(tracValue) + "*z/" + util::to_string(ir), 3);
+		if (i < numPreStep)
+		{
+			//assembler.options().setReal("SurfaceTension", (i + 1) * surfaceTension / numPreStep);
+			//gsInfo << " with SurfaceTension: " << (i + 1) * surfaceTension / numPreStep << "\n";
+			assembler.options().setReal("SurfaceTension", SurfaceTensionValue(i));
+			gsInfo << " with SurfaceTension: " << SurfaceTensionValue(i) << "\n";
+			of.open(file1, std::ios_base::app);
+			of << "0\n";
+			of.close();
+		}
+		else
+		{
+			real_t tracValue = tracValues(i - numPreStep);
+			//real_t tracValue = maxLoad / numLoadSteps * (i + 1 - numPreStep);
+			gsInfo << " with traction: " << tracValue << "\n";
+			of.open(file1, std::ios_base::app);
+			of << tracValue << "\n";
+			of.close();
+			traction = gsFunctionExpr<>(
+				util::to_string(tracValue) + "*x/" + util::to_string(ir),
+				util::to_string(tracValue) + "*y/" + util::to_string(ir),
+				util::to_string(tracValue) + "*z/" + util::to_string(ir), 3);
+		}
 #endif
 		
 		assembler.refresh();
@@ -404,25 +454,70 @@ int main(int argc, char* argv[])
 		gsVector<> stabilityVec = LDLTsolver.vectorD();
 		real_t stability = stabilityVec.colwise().minCoeff()[0];
 		gsInfo << "Stability = " << stability << "\n";
+		if (stability < 0)
+		{
+			gsInfo << "Bifurcation point found!\n";
+			break;
+		}
 #endif
 
 		assembler.constructSolution(solver.solution(), solver.allFixedDofs(), displacement);
 		assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
-		assembler.constructCauchyStressesExtension(displacement, reaction, boundary::front, stress_components::normal_3D_vector);
+		//assembler.constructCauchyStressesExtension(displacement, reaction, boundary::front, stress_components::normal_3D_vector);
 		cs++;
 		//assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
 		if (numPlotPoints > 0 && cs == numStepsPerFrame)
 		{
 			frame++;
 			gsWriteParaviewMultiPhysicsTimeStepWithMesh(fields, filenameParaview, collection, frame, numPlotPoints, meshPlot);
-			gsWriteHistoryOutputBoundaryResults(fields, file2, "Displacement", boundary::front, 100);
-			gsWriteHistoryOutputBoundaryResults(fields2, file3, "Reaction", boundary::front, 100);
+			//gsWriteHistoryOutputBoundaryResults(fields, file2, "Displacement", boundary::front, 100);
+			//gsWriteHistoryOutputBoundaryResults(fields2, file6, "Reaction", boundary::front, 100);
 			//gsWriteHistoryOutputBoundaryResults(fields, file3, "Displacement", boundary::back, 100);
+			
+#if !DISPCONTROL
+			gsMatrix<> A(3, 1);
+			A << .5, .5, 0.;
+			A = displacement.patch(0).eval(A);
+			of.open(file2, std::ios_base::app);
+			if (A.at(0) > 0)
+				of << math::sqrt(math::pow(A.at(0), 2) + math::pow(A.at(1), 2) + math::pow(A.at(2), 2)) << "\n";
+			else
+				of << -1 * (math::sqrt(math::pow(A.at(0), 2) + math::pow(A.at(1), 2) + math::pow(A.at(2), 2))) << "\n";
+			of.close();
+
+			A << 0., 0., 0.;
+			A = displacement.patch(0).eval(A);
+			of.open(file3, std::ios_base::app);
+			if (A.at(0) > 0)
+				of << math::sqrt(math::pow(A.at(0), 2) + math::pow(A.at(1), 2) + math::pow(A.at(2), 2)) << "\n";
+			else
+				of << -1 * (math::sqrt(math::pow(A.at(0), 2) + math::pow(A.at(1), 2) + math::pow(A.at(2), 2))) << "\n";
+			of.close();
+
+			A << 1., 0., 0.;
+			A = displacement.patch(0).eval(A);
+			of.open(file4, std::ios_base::app);
+			if (A.at(0) > 0)
+				of << math::sqrt(math::pow(A.at(0), 2) + math::pow(A.at(1), 2) + math::pow(A.at(2), 2)) << "\n";
+			else
+				of << -1 * (math::sqrt(math::pow(A.at(0), 2) + math::pow(A.at(1), 2) + math::pow(A.at(2), 2))) << "\n";
+			of.close();
+
+			A << 0., 1., 0.;
+			A = displacement.patch(0).eval(A);
+			of.open(file5, std::ios_base::app);
+			if (A.at(0) > 0)
+				of << math::sqrt(math::pow(A.at(0), 2) + math::pow(A.at(1), 2) + math::pow(A.at(2), 2)) << "\n";
+			else
+				of << -1 * (math::sqrt(math::pow(A.at(0), 2) + math::pow(A.at(1), 2) + math::pow(A.at(2), 2))) << "\n";
+			of.close();
+#endif
+
 			cs = 0;
 		}
 	}
-#endif
 	gsInfo << "Solved the system in " << clock.stop() << "s.\n";
+#endif
 	//delete basis;
 	if (numPlotPoints > 0)
 	{

@@ -45,7 +45,8 @@ void gsCauchyStressFunction<T>::linearElastic(const gsMatrix<T> & u, gsMatrix<T>
     for (index_t q = 0; q < u.cols(); ++q)
     {
         // linear strain tensor eps = (gradU+gradU^T)/2
-        if (mdGeo.jacobian(q).determinant() <= 0)
+        //if (mdGeo.jacobian(q).determinant() <= 0)
+        if (mdGeo.jacobian(q).determinant() < 0)
             gsInfo << "Invalid domain parametrization: J = " << mdGeo.jacobian(q).determinant() <<
                       " at point (" << u.col(q).transpose() << ") of patch " << m_patch << std::endl;
         if (abs(mdGeo.jacobian(q).determinant()) > 1e-20)
@@ -82,7 +83,8 @@ void gsCauchyStressFunction<T>::nonLinearElastic(const gsMatrix<T> & u, gsMatrix
     for (index_t q = 0; q < u.cols(); ++q)
     {
         // deformation gradient F = I + gradU*gradGeo^-1
-        if (mdGeo.jacobian(q).determinant() <= 0)
+        //if (mdGeo.jacobian(q).determinant() <= 0)
+        if (mdGeo.jacobian(q).determinant() < 0)
             gsInfo << "Invalid domain parametrization: J = " << mdGeo.jacobian(q).determinant() <<
                       " at point (" << u.col(q).transpose() << ") of patch " << m_patch << std::endl;
         if (abs(mdGeo.jacobian(q).determinant()) > 1e-20)
@@ -142,7 +144,8 @@ void gsCauchyStressFunction<T>::mixedLinearElastic(const gsMatrix<T> & u, gsMatr
     for (index_t q = 0; q < u.cols(); ++q)
     {
         // linear strain tensor eps = (gradU+gradU^T)/2
-        if (mdGeo.jacobian(q).determinant() <= 0)
+        //if (mdGeo.jacobian(q).determinant() <= 0)
+        if (mdGeo.jacobian(q).determinant() < 0)
             gsInfo << "Invalid domain parametrization: J = " << mdGeo.jacobian(q).determinant() <<
                       " at point (" << u.col(q).transpose() << ") of patch " << m_patch << std::endl;
         if (abs(mdGeo.jacobian(q).determinant()) > 1e-20)
@@ -179,7 +182,8 @@ void gsCauchyStressFunction<T>::mixedNonLinearElastic(const gsMatrix<T> & u, gsM
 
     for (index_t q = 0; q < u.cols(); ++q)
     {
-        if (mdGeo.jacobian(q).determinant() <= 0)
+        //if (mdGeo.jacobian(q).determinant() <= 0)
+        if (mdGeo.jacobian(q).determinant() < 0)
             gsInfo << "Invalid domain parametrization: J = " << mdGeo.jacobian(q).determinant() <<
                       " at point (" << u.col(q).transpose() << ") of patch " << m_patch << std::endl;
         // deformation gradient F = I + gradU*gradGeo^-1
