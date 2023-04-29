@@ -37,7 +37,7 @@ int main(int argc, char* argv[])
 #endif // USE_SURFACE_TENSION
 
 	real_t surfaceYoungsModulus = 0.0;
-	real_t surfacePoissonsRatio = 0.4;
+	real_t surfacePoissonsRatio = 0.0;
 
 	//mesh
 	index_t numUniRef = 3;
@@ -99,18 +99,18 @@ int main(int argc, char* argv[])
 	//for (int i = 1; i < rs.size() - 1; i++)
 	    //rs(i) = rs(i - 1) * M_PI / 4. / pow(2, numUniRef) + rs(i - 1);
 	std::vector<real_t> rs;
-	rs.emplace_back(ir * M_PI / 4. / pow(2, numUniRef) + ir);
-	rs.emplace_back(rs.back() * M_PI / 4. / pow(2, numUniRef) + rs.back());
+	rs.emplace_back(ir * M_PI / 2. / pow(2, numUniRef) + ir);
+	rs.emplace_back(rs.back() * M_PI / 2. / pow(2, numUniRef) + rs.back());
 	
 #if 1
 	while ((rs.back() - rs[rs.size() - 2]) * 2. + rs.back() < rMax)
 	{
 		if (rs.back() > (rMax - ir) / 10. + ir)
-			rs.emplace_back(rs.back() * M_PI / 4. / pow(2, numUniRef) * 1.5 + rs.back());
+			rs.emplace_back(rs.back() * M_PI / 2. / pow(2, numUniRef) * 1.5 + rs.back());
 		else if (rs.back() > (rMax - ir) / 10. * 2. + ir)
-			rs.emplace_back(rs.back() * M_PI / 4. / pow(2, numUniRef) * 2.0 + rs.back());
+			rs.emplace_back(rs.back() * M_PI / 2. / pow(2, numUniRef) * 2.0 + rs.back());
 		else
-			rs.emplace_back(rs.back() * M_PI / 4. / pow(2, numUniRef) + rs.back());	
+			rs.emplace_back(rs.back() * M_PI / 2. / pow(2, numUniRef) + rs.back());	
 	}
 #else
 	while ((rs.back() - rs[rs.size() - 2]) * 2. + rs.back() < rMax)

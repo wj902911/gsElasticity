@@ -19,8 +19,8 @@ int main(int argc, char* argv[])
 	//geometry
 	real_t ch = 26.0;
 	real_t cb = 30.0;
-	real_t bh = 30;
-	real_t bb = bh;
+	real_t bb = 30;
+	real_t bh = bb;
 
 	//material
 	real_t youngsModulus = 3e-9;
@@ -31,7 +31,12 @@ int main(int argc, char* argv[])
 	real_t surfacePoissonsRatio = 0.495;
 
 	//mesh
-	index_t numUniRef = 2;
+	index_t numUniRef = 0;
+	index_t numUniRef_cb = 1;
+	index_t numUniRef_bbx = 1;
+	index_t numUniRef_bby = 1;
+	index_t numUniRef_ch = 2;
+	index_t numUniRef_bh = 2;
 	index_t numDegElev = 1;
 	
 	//solver
@@ -64,10 +69,11 @@ int main(int argc, char* argv[])
 	std::vector<gsTensorBSpline<3, real_t>> patches;
 	//1
 	gsVector<real_t, 3> center;
-	real_t hafbx = cb / 2.;
-	real_t hafby = cb / 2.;
+	real_t hafbx = cb / 4.;
+	real_t hafby = cb / 4.;
 	real_t hafh = ch / 2.;
-	center << 0., 0., hafh;
+	center << hafbx, hafby, hafh;
+	gsInfo << center << "\n\n";
 	C <<
 		-hafbx, -hafby, -hafh, hafbx, -hafby, -hafh, -hafbx, hafby, -hafh, hafbx, hafby, -hafh,
 		-hafbx, -hafby,  hafh, hafbx, -hafby,  hafh, -hafbx, hafby,  hafh, hafbx, hafby,  hafh;
@@ -79,20 +85,23 @@ int main(int argc, char* argv[])
 	
 	//2
 	hafh = bh / 2.;
-	center << 0., 0., -hafh;
+	center << hafbx, hafby, -hafh;
+	gsInfo << center << "\n\n";
 	C <<
 		-hafbx, -hafby, -hafh, hafbx, -hafby, -hafh, -hafbx, hafby, -hafh, hafbx, hafby, -hafh,
 		-hafbx, -hafby, hafh, hafbx, -hafby, hafh, -hafbx, hafby, hafh, hafbx, hafby, hafh;
+	C.col(0).array() += center(0);
 	C.col(1).array() += center(1);
 	C.col(2).array() += center(2);
 	gsTensorBSpline<3, real_t> patch2(KV1, KV2, KV3, C);
 	patches.push_back(patch2);
 
 	//3
-	hafbx = bb / 2.;
-	hafby = bb / 2.;
+	hafbx = bb / 4.;
+	hafby = bb / 4.;
 	hafh = bh / 2.;
-	center << -(cb / 2. + hafbx), -(cb / 2. + hafby), -hafh;
+	center << cb / 2. + hafbx, hafby, -hafh;
+	gsInfo << center << "\n\n";
 	C <<
 		-hafbx, -hafby, -hafh, hafbx, -hafby, -hafh, -hafbx, hafby, -hafh, hafbx, hafby, -hafh,
 		-hafbx, -hafby, hafh, hafbx, -hafby, hafh, -hafbx, hafby, hafh, hafbx, hafby, hafh;
@@ -102,7 +111,7 @@ int main(int argc, char* argv[])
 	gsTensorBSpline<3, real_t> patch3(KV1, KV2, KV3, C);
 	patches.push_back(patch3);
 
-	center << (cb / 2. + hafbx), -(cb / 2. + hafby), -hafh;
+	center << (cb / 2. + hafbx), (cb / 2. + hafby), -hafh;
 	C <<
 		-hafbx, -hafby, -hafh, hafbx, -hafby, -hafh, -hafbx, hafby, -hafh, hafbx, hafby, -hafh,
 		-hafbx, -hafby, hafh, hafbx, -hafby, hafh, -hafbx, hafby, hafh, hafbx, hafby, hafh;
@@ -112,7 +121,7 @@ int main(int argc, char* argv[])
 	gsTensorBSpline<3, real_t> patch4(KV1, KV2, KV3, C);
 	patches.push_back(patch4);
 
-	center << (cb / 2. + hafbx), (cb / 2. + hafby), -hafh;
+	center << hafbx, cb / 2. + hafby, -hafh;
 	C <<
 		-hafbx, -hafby, -hafh, hafbx, -hafby, -hafh, -hafbx, hafby, -hafh, hafbx, hafby, -hafh,
 		-hafbx, -hafby, hafh, hafbx, -hafby, hafh, -hafbx, hafby, hafh, hafbx, hafby, hafh;
@@ -130,7 +139,7 @@ int main(int argc, char* argv[])
 	C.col(1).array() += center(1);
 	C.col(2).array() += center(2);
 	gsTensorBSpline<3, real_t> patch6(KV1, KV2, KV3, C);
-	patches.push_back(patch6);
+	//patches.push_back(patch6);
 
 	//4
 	hafbx = cb / 2.;
@@ -142,7 +151,7 @@ int main(int argc, char* argv[])
 	C.col(1).array() += center(1);
 	C.col(2).array() += center(2);
 	gsTensorBSpline<3, real_t> patch7(KV1, KV2, KV3, C);
-	patches.push_back(patch7);
+	//patches.push_back(patch7);
 
 	center << 0.0, (cb / 2. + hafby), -hafh;
 	C <<
@@ -152,7 +161,7 @@ int main(int argc, char* argv[])
 	C.col(1).array() += center(1);
 	C.col(2).array() += center(2);
 	gsTensorBSpline<3, real_t> patch8(KV1, KV2, KV3, C);
-	patches.push_back(patch8);
+	//patches.push_back(patch8);
 
 	//5
 	hafbx = bb / 2.;
@@ -165,7 +174,7 @@ int main(int argc, char* argv[])
 	C.col(1).array() += center(1);
 	C.col(2).array() += center(2);
 	gsTensorBSpline<3, real_t> patch9(KV1, KV2, KV3, C);
-	patches.push_back(patch9);
+	//patches.push_back(patch9);
 
 	center << (cb / 2. + hafbx), 0.0, -hafh;
 	C <<
@@ -175,7 +184,7 @@ int main(int argc, char* argv[])
 	C.col(1).array() += center(1);
 	C.col(2).array() += center(2);
 	gsTensorBSpline<3, real_t> patch10(KV1, KV2, KV3, C);
-	patches.push_back(patch10);
+	//patches.push_back(patch10);
 
 	gsMultiPatch<> geometry;
 	for (int i = 0; i < patches.size(); i++)
@@ -190,7 +199,42 @@ int main(int argc, char* argv[])
 		basisDisplacement.degreeElevate();
 	for (index_t i = 0; i < numUniRef; ++i)
 		basisDisplacement.uniformRefine();
-	
+	for (index_t i = 0; i < numUniRef_cb; i++)
+	{
+		gsTensorBasis<3, real_t>* tbasis = dynamic_cast<gsTensorBasis<3, real_t>*>(&basisDisplacement[0]);
+		tbasis->x().uniformRefine();
+		tbasis->y().uniformRefine();
+	}
+	for (index_t i = 0; i < numUniRef_ch; i++)
+	{
+		gsTensorBasis<3, real_t>* tbasis = dynamic_cast<gsTensorBasis<3, real_t>*>(&basisDisplacement[0]);
+		tbasis->z().uniformRefine();
+	}
+	for (index_t i = 0; i < numUniRef_bbx; i++)
+	{
+		for (index_t j = 1; j < geometry.nPatches(); j++)
+		{
+			gsTensorBasis<3, real_t>* tbasis = dynamic_cast<gsTensorBasis<3, real_t>*>(&basisDisplacement[j]);
+			tbasis->x().uniformRefine();
+		}
+	}
+	for (index_t i = 0; i < numUniRef_bby; i++)
+	{
+		for (index_t j = 1; j < geometry.nPatches(); j++)
+		{
+			gsTensorBasis<3, real_t>* tbasis = dynamic_cast<gsTensorBasis<3, real_t>*>(&basisDisplacement[j]);
+			tbasis->y().uniformRefine();
+		}
+	}
+	for (index_t i = 0; i < numUniRef_bh; i++)
+	{
+		for(index_t j=1;j< geometry.nPatches();j++)
+		{
+			gsTensorBasis<3, real_t>* tbasis = dynamic_cast<gsTensorBasis<3, real_t>*>(&basisDisplacement[j]);
+			tbasis->z().uniformRefine();
+		}
+	}
+
 	gsBoundaryConditions<> bcInfo;
 	//for (int i = 0; i < geometry.nPatches(); i++)
 	for (int i = 1; i < geometry.nPatches(); i++)
@@ -285,7 +329,7 @@ int main(int argc, char* argv[])
 		gsWriteParaviewMultiPhysicsTimeStepWithMesh(fields, filenameParaview, collection, 0, numPlotPoints, meshPlot);
 	}
 	
-#if 1
+#if 0
 	gsInfo << "Solving...\n";
 	index_t numStepsPerFrame = numLoadSteps / numFrames;
 	index_t cs = 0;
