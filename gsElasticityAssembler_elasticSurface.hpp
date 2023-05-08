@@ -54,6 +54,13 @@ void gsElasticityAssemblerElasticSurface<T>::constructCauchyStressesExtension(co
             &(m_pde_ptr->domain()), &displacement));
 }
 
+template <class T>
+void gsElasticityAssemblerElasticSurface<T>::constructGeoCalc(gsPiecewiseFunction<T>& result, real_t radius) const
+{
+    for (size_t p = 0; p < m_pde_ptr->domain().nPatches(); ++p)
+        result.addPiecePointer(new gsGeoCalcFunction<T>(radius));
+}
+
 template<class T>
 void gsElasticityAssemblerElasticSurface<T>::assemble(bool saveEliminationMatrix)
 {

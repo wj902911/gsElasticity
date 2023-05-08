@@ -107,6 +107,31 @@ protected:
     boundary::side m_bs;
 }; // class definition ends
 
+template <class T>
+class gsGeoCalcFunction : public gsFunction<T>
+{
+public:
+	
+    gsGeoCalcFunction(real_t radius)
+        :m_radius(radius)
+    {}
+
+    virtual short_t domainDim() const { return 3; }
+
+    virtual short_t targetDim() const { return 1; }
+	
+    virtual void eval_into(const gsMatrix<T>& u, gsMatrix<T>& result) const
+    {
+        result.setZero(targetDim(), u.cols());
+        for (index_t q = 0; q < u.cols(); ++q)
+        {
+            result(0, q) = u.col(q).norm() - m_radius;
+        }
+    }
+protected:
+	real_t m_radius;
+};
+
 
 } // namespace ends
 

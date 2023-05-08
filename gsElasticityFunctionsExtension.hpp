@@ -16,6 +16,7 @@
 #pragma once
 
 #include <gsElasticity/gsElasticityFunctionsExtension.h>
+#include <gsElasticity/gsWriteParaviewMultiPhysicsExtension.h>
 #include <gsCore/gsFuncData.h>
 #include <gsAssembler/gsAssembler.h>
 

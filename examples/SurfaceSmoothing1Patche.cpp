@@ -19,7 +19,8 @@ int main(int argc, char* argv[])
 	//geometry
 	real_t ch = 26.0;
 	real_t cb = 30.0;
-	real_t bb = 30;
+	real_t p = 90.0;
+	real_t bb = (p - cb) / 2.;
 	real_t bh = bb;
 
 	//material
@@ -28,7 +29,7 @@ int main(int argc, char* argv[])
 
 	real_t surfaceTension = 1e-7;
 	real_t surfaceYoungsModulus = 0.0;
-	real_t surfacePoissonsRatio = 0.495;
+	real_t surfacePoissonsRatio = 0.0;
 
 	//mesh
 	index_t numUniRef = 0;
@@ -131,61 +132,6 @@ int main(int argc, char* argv[])
 	gsTensorBSpline<3, real_t> patch5(KV1, KV2, KV3, C);
 	patches.push_back(patch5);
 
-	center << -(cb / 2. + hafbx), (cb / 2. + hafby), -hafh;
-	C <<
-		-hafbx, -hafby, -hafh, hafbx, -hafby, -hafh, -hafbx, hafby, -hafh, hafbx, hafby, -hafh,
-		-hafbx, -hafby, hafh, hafbx, -hafby, hafh, -hafbx, hafby, hafh, hafbx, hafby, hafh;
-	C.col(0).array() += center(0);
-	C.col(1).array() += center(1);
-	C.col(2).array() += center(2);
-	gsTensorBSpline<3, real_t> patch6(KV1, KV2, KV3, C);
-	//patches.push_back(patch6);
-
-	//4
-	hafbx = cb / 2.;
-	center << 0.0, -(cb / 2. + hafby), -hafh;
-	C <<
-		-hafbx, -hafby, -hafh, hafbx, -hafby, -hafh, -hafbx, hafby, -hafh, hafbx, hafby, -hafh,
-		-hafbx, -hafby, hafh, hafbx, -hafby, hafh, -hafbx, hafby, hafh, hafbx, hafby, hafh;
-	C.col(0).array() += center(0);
-	C.col(1).array() += center(1);
-	C.col(2).array() += center(2);
-	gsTensorBSpline<3, real_t> patch7(KV1, KV2, KV3, C);
-	//patches.push_back(patch7);
-
-	center << 0.0, (cb / 2. + hafby), -hafh;
-	C <<
-		-hafbx, -hafby, -hafh, hafbx, -hafby, -hafh, -hafbx, hafby, -hafh, hafbx, hafby, -hafh,
-		-hafbx, -hafby, hafh, hafbx, -hafby, hafh, -hafbx, hafby, hafh, hafbx, hafby, hafh;
-	C.col(0).array() += center(0);
-	C.col(1).array() += center(1);
-	C.col(2).array() += center(2);
-	gsTensorBSpline<3, real_t> patch8(KV1, KV2, KV3, C);
-	//patches.push_back(patch8);
-
-	//5
-	hafbx = bb / 2.;
-	hafby = cb / 2.;
-	center << -(cb / 2. + hafbx), 0.0, -hafh;
-	C <<
-		-hafbx, -hafby, -hafh, hafbx, -hafby, -hafh, -hafbx, hafby, -hafh, hafbx, hafby, -hafh,
-		-hafbx, -hafby, hafh, hafbx, -hafby, hafh, -hafbx, hafby, hafh, hafbx, hafby, hafh;
-	C.col(0).array() += center(0);
-	C.col(1).array() += center(1);
-	C.col(2).array() += center(2);
-	gsTensorBSpline<3, real_t> patch9(KV1, KV2, KV3, C);
-	//patches.push_back(patch9);
-
-	center << (cb / 2. + hafbx), 0.0, -hafh;
-	C <<
-		-hafbx, -hafby, -hafh, hafbx, -hafby, -hafh, -hafbx, hafby, -hafh, hafbx, hafby, -hafh,
-		-hafbx, -hafby, hafh, hafbx, -hafby, hafh, -hafbx, hafby, hafh, hafbx, hafby, hafh;
-	C.col(0).array() += center(0);
-	C.col(1).array() += center(1);
-	C.col(2).array() += center(2);
-	gsTensorBSpline<3, real_t> patch10(KV1, KV2, KV3, C);
-	//patches.push_back(patch10);
-
 	gsMultiPatch<> geometry;
 	for (int i = 0; i < patches.size(); i++)
 		geometry.addPatch(patches[i]);
@@ -238,44 +184,24 @@ int main(int argc, char* argv[])
 	gsBoundaryConditions<> bcInfo;
 	//for (int i = 0; i < geometry.nPatches(); i++)
 	for (int i = 1; i < geometry.nPatches(); i++)
-		for (int j = 0; j < 3; j++)
-			bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, nullptr, j);
-
+		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, nullptr, 2);
+	bcInfo.addCondition(0, boundary::south, condition_type::dirichlet, nullptr, 1);
+	bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, 0);
+	bcInfo.addCondition(1, boundary::south, condition_type::dirichlet, nullptr, 1);
+	bcInfo.addCondition(1, boundary::west, condition_type::dirichlet, nullptr, 0);
+	bcInfo.addCondition(2, boundary::south, condition_type::dirichlet, nullptr, 1);
+	bcInfo.addCondition(2, boundary::east, condition_type::dirichlet, nullptr, 0);
+	bcInfo.addCondition(3, boundary::north, condition_type::dirichlet, nullptr, 1);
+	bcInfo.addCondition(3, boundary::east, condition_type::dirichlet, nullptr, 0);
+	bcInfo.addCondition(4, boundary::north, condition_type::dirichlet, nullptr, 1);
+	bcInfo.addCondition(4, boundary::west, condition_type::dirichlet, nullptr, 0);
+	
 	//for (int i = 0; i < geometry.nPatches(); i++)
 	for (int i = 2; i < geometry.nPatches(); i++)
 		bcInfo.addCondition(i, boundary::back, condition_type::robin, nullptr);
-#if 1
 	bcInfo.addCondition(0, boundary::back, condition_type::robin, nullptr);
-	bcInfo.addCondition(0, boundary::west, condition_type::robin, nullptr);
-	bcInfo.addCondition(2, boundary::west, condition_type::robin, nullptr);
-	bcInfo.addCondition(5, boundary::west, condition_type::robin, nullptr);
-	bcInfo.addCondition(8, boundary::west, condition_type::robin, nullptr);
-	bcInfo.addCondition(0, boundary::east, condition_type::robin, nullptr);
-	bcInfo.addCondition(3, boundary::east, condition_type::robin, nullptr);
-	bcInfo.addCondition(4, boundary::east, condition_type::robin, nullptr);
-	bcInfo.addCondition(9, boundary::east, condition_type::robin, nullptr);
 	bcInfo.addCondition(0, boundary::north, condition_type::robin, nullptr);
-	bcInfo.addCondition(4, boundary::north, condition_type::robin, nullptr);
-	bcInfo.addCondition(5, boundary::north, condition_type::robin, nullptr);
-	bcInfo.addCondition(7, boundary::north, condition_type::robin, nullptr);
-	bcInfo.addCondition(0, boundary::south, condition_type::robin, nullptr);
-	bcInfo.addCondition(2, boundary::south, condition_type::robin, nullptr);
-	bcInfo.addCondition(3, boundary::south, condition_type::robin, nullptr);
-	bcInfo.addCondition(6, boundary::south, condition_type::robin, nullptr);
-#else
-	bcInfo.addCondition(1, boundary::west, condition_type::robin, nullptr);
-	bcInfo.addCondition(4, boundary::west, condition_type::robin, nullptr);
-	bcInfo.addCondition(7, boundary::west, condition_type::robin, nullptr);
-	bcInfo.addCondition(2, boundary::east, condition_type::robin, nullptr);
-	bcInfo.addCondition(3, boundary::east, condition_type::robin, nullptr);
-	bcInfo.addCondition(8, boundary::east, condition_type::robin, nullptr);
-	bcInfo.addCondition(3, boundary::north, condition_type::robin, nullptr);
-	bcInfo.addCondition(4, boundary::north, condition_type::robin, nullptr);
-	bcInfo.addCondition(6, boundary::north, condition_type::robin, nullptr);
-	bcInfo.addCondition(1, boundary::south, condition_type::robin, nullptr);
-	bcInfo.addCondition(2, boundary::south, condition_type::robin, nullptr);
-	bcInfo.addCondition(5, boundary::south, condition_type::robin, nullptr);
-#endif
+	bcInfo.addCondition(0, boundary::east, condition_type::robin, nullptr);
 
 	//bcInfo.addCondition(2, boundary::south, condition_type::robin, nullptr);
 	//bcInfo.addCondition(2, boundary::east, condition_type::robin, nullptr);
@@ -329,7 +255,7 @@ int main(int argc, char* argv[])
 		gsWriteParaviewMultiPhysicsTimeStepWithMesh(fields, filenameParaview, collection, 0, numPlotPoints, meshPlot);
 	}
 	
-#if 0
+#if 1
 	gsInfo << "Solving...\n";
 	index_t numStepsPerFrame = numLoadSteps / numFrames;
 	index_t cs = 0;

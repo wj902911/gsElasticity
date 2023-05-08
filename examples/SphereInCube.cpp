@@ -25,7 +25,7 @@ int main(int argc, char* argv[])
 {
 
 	//geometry
-	real_t rMax = 20.0;
+	real_t cubeSize = 20.0;
 	real_t ir = 0.1;//0.1mm
 	//real_t incRatial = 1.0;
 	real_t x = 0.0;
@@ -48,7 +48,8 @@ int main(int argc, char* argv[])
 	real_t surfacePoissonsRatio = 0.0;
 
 	//mesh
-	index_t numUniRef = 1;
+	index_t numUniRef_hoop = 1;
+	index_t numUniRef_radial = 3;
 	index_t numDegElev = 0;
 	//index_t numRadialElems = 25;
 	//index_t numDegRedu = 1;
@@ -57,8 +58,8 @@ int main(int argc, char* argv[])
 	real_t bisecTol = 1e-10;
 
 	//solver
-#define DISPCONTROL 0
-#define FIX_INNER_SURFACE 0
+#define DISPCONTROL 1
+//#define FIX_INNER_SURFACE 0
 #if DISPCONTROL
 	real_t maxDisp = 4;
 #else
@@ -74,7 +75,11 @@ int main(int argc, char* argv[])
 	index_t numLoadSteps = 20;
 	index_t numFrames = numLoadSteps;
 #endif // USE_SURFACE_TENSION
+#if DISPCONTROL
+	real_t DeltaDisp = maxDisp / (numLoadSteps - numPreStep);
+#else
 	real_t DeltaTrac = maxLoad / (numLoadSteps - numPreStep);
+#endif
 	index_t maxIter = 30;
 
 	//plot
@@ -85,7 +90,8 @@ int main(int argc, char* argv[])
 	gsCmdLine cmd("This is Cook's membrane benchmark with nonlinear elasticity solver.");
 	cmd.addReal("p", "poisson", "Poisson's ratio used in the material law", poissonsRatio);
 	cmd.addReal("v", "sufacePoisson", "Poisson's ratio used in the surface material law", surfacePoissonsRatio);
-	cmd.addInt("r", "refine", "Number of uniform refinement application", numUniRef);
+	cmd.addInt("r", "refine_r", "Number of uniform refinement application in radial direction", numUniRef_radial);
+	cmd.addInt("o", "refine_h", "Number of uniform refinement application in hoop direction", numUniRef_hoop);
 	cmd.addInt("d", "degelev", "Number of degree elevation application", numDegElev);
 	cmd.addInt("s", "point", "Number of points to plot to Paraview", numPlotPoints);
 	cmd.addReal("t", "surfTen", "Constant surface tension", surfaceTension);
@@ -103,6 +109,7 @@ int main(int argc, char* argv[])
 	//rs(0) = ir * M_PI / 4. / pow(2, numUniRef) + ir;
 	//for (int i = 1; i < rs.size() - 1; i++)
 		//rs(i) = rs(i - 1) * M_PI / 4. / pow(2, numUniRef) + rs(i - 1);
+#if 0
 	real_t ratio1 = 1.5;
 	real_t ratio2 = 2.0;
 	real_t ratio3 = 2.0;
@@ -134,21 +141,25 @@ int main(int argc, char* argv[])
 		KnotInsert[i] = (rs[i] - ir) / (rMax - ir);
 		KV3.insert(KnotInsert[i], 1);
 	}
+#else
+	std::vector<real_t> rs;
+	index_t numKnotInsert = 0;
+#endif
 	//gsInfo << rs << "\n\n";
 	//gsInfo << KnotInsert << "\n\n";
 	gsMatrix<real_t> C(50 + 25 * numKnotInsert, 3);
 	//gsMatrix<real_t> C(18, 3);
 	gsMatrix<real_t> C1(25, 3);
 	gsMatrix<real_t> C2(25, 3);
-	gsMatrix<real_t> C3(25 * numKnotInsert, 3);
-	gsMatrix<real_t> CTemp(25, 3);
+	//gsMatrix<real_t> C3(25 * numKnotInsert, 3);
+	//gsMatrix<real_t> CTemp(25, 3);
 	gsMatrix<real_t> W(50 + 25 * numKnotInsert, 1);
 	//gsMatrix<real_t> W(18, 1);
 	gsMatrix<real_t> W1(25, 1);
 	gsMatrix<real_t> W2(25, 1);
-	gsMatrix<real_t> W3(25 * numKnotInsert, 1);
-	C3.setZero();
-	W3.setZero();
+	//gsMatrix<real_t> W3(25 * numKnotInsert, 1);
+	//C3.setZero();
+	//W3.setZero();
 
 	gsVector<real_t> rotAxis(3);
 	rotAxis << sqrt(3.) / 3., sqrt(3.) / 3., sqrt(3.) / 3.;
@@ -159,79 +170,116 @@ int main(int argc, char* argv[])
 		4.11438191683587284330769762163982,
 		4.34314575050761941810151256504469,
 		4.68629150101523972438144483021460,
-		
 		4.00000000000000000000000000000000,
 		4.00000000000000000000000000000000,
 		4.10867849108508043087795158498921,
 		4.32456764352295053299712890293449,
 		4.64619962758132043489922580192797,
-		
 		4.11438191683587284330769762163982,
 		4.10867849108508043087795158498921,
 		4.20526495214135032085778220789507,
 		4.40174810706343944133323020651005,
 		4.69731520891156240082864314899780,
-		
 		4.34314575050761941810151256504469,
 		4.32456764352295053299712890293449,
 		4.40174810706343944133323020651005,
 		4.57237657197148017473864456405863,
 		4.83730323642847892529061937239021,
-		
 		4.68629150101523972438144483021460,
 		4.64619962758132043489922580192797,
 		4.69731520891156240082864314899780,
 		4.83730323642847892529061937239021,
 		5.07179676972449122729358350625262;
 	
-	W2 << W1;
+	W2 << 
+		1., 1., 1., 1., 1.,
+		1., 1., 1., 1., 1.,
+		1., 1., 1., 1., 1.,
+		1., 1., 1., 1., 1.,
+		1., 1., 1., 1., 1.;
 
-	for (int i = 0; i < numKnotInsert; i++)
-		W3.block(25. * i, 0, 25, 1) = W1;
+	//for (int i = 0; i < numKnotInsert; i++)
+	//	W3.block(25. * i, 0, 25, 1) = W1;
 
-	W << W1, W2, W3;
-	//W << W1, W2;
+	W << W1, W2;
 
 
 	//1
-	CTemp <<
+	C1 <<
 		1.00000000000000000000000000000000, 0.00000000000000000000000000000000, 0.00000000000000000000000000000000,
 		1.00000000000000000000000000000000, 0.20710678118654751722615969811159, 0.00000000000000000000000000000000,
 		0.94439897941033268402577505185036, 0.40269821396808214153395510948030, 0.00000000000000000000000000000000,
 		0.84198285288145657823122292029439, 0.57223070949163856724339893844444, 0.00000000000000000000000000000000,
 		0.70710678118654746171500846685376, 0.70710678118654746171500846685376, 0.00000000000000000000000000000000,
-		
+
 		1.00000000000000000000000000000000, 0.00000000000000000000000000000000, 0.20710678118654751722615969811159,
 		1.00000000000000000000000000000000, 0.20710678118654751722615969811159, 0.20710678118654751722615969811159,
 		0.94432179734478771671035701729124, 0.40268222903892175734696934341628, 0.19797538630529729064555510831269,
 		0.84198285288145646720892045777873, 0.57223070949163856724339893844444, 0.18115045237214510986945015247329,
 		0.70710678118654746171500846685376, 0.70710678118654746171500846685376, 0.15891862259789110711771797923575,
-		
+
 		0.94439897941033268402577505185036, 0.00000000000000000000000000000000, 0.40269821396808214153395510948030,
 		0.94432179734478771671035701729124, 0.19797538630529729064555510831269, 0.40268222903892175734696934341628,
 		0.89514378285984974592537355420063, 0.38556611722930161922917591255100, 0.38556611722930161922917591255100,
 		0.80450256336705749937721066089580, 0.55014710267914124219856830677600, 0.35385983263387738029237539194582,
 		0.68375661096064965782659328397131, 0.68375661096064965782659328397131, 0.31168902873712167611586210114183,
-		
+
 		0.84198285288145657823122292029439, 0.00000000000000000000000000000000, 0.57223070949163856724339893844444,
 		0.84198285288145646720892045777873, 0.18115045237214510986945015247329, 0.57223070949163856724339893844444,
 		0.80450256336705749937721066089580, 0.35385983263387738029237539194582, 0.55014710267914124219856830677600,
 		0.73473280857926925868639500549762, 0.50883886682844026161376405070769, 0.50883886682844026161376405070769,
 		0.63966542995691610951070060764323, 0.63966542995691610951070060764323, 0.45271994765504508517750537066604,
-		
+
 		0.70710678118654746171500846685376, 0.00000000000000000000000000000000, 0.70710678118654746171500846685376,
 		0.70710678118654746171500846685376, 0.15891862259789110711771797923575, 0.70710678118654746171500846685376,
 		0.68375661096064965782659328397131, 0.31168902873712167611586210114183, 0.68375661096064965782659328397131,
 		0.63966542995691610951070060764323, 0.45271994765504508517750537066604, 0.63966542995691610951070060764323,
 		0.57735026918962573105886804114562, 0.57735026918962573105886804114562, 0.57735026918962573105886804114562;
 
-	C1 << CTemp * rMax;
-	C2 << CTemp * ir;
-	for (int i = 0; i < numKnotInsert; i++)
-		C3.block(25. * i, 0, 25, 3) = CTemp * rs[i];
+	std::ofstream file("conctrolPoints.txt");
+	file << std::setprecision(32);
+	gsMatrix<real_t> rotMat_o = generateRotationMatrix(-M_PI * 2. / 3., rotAxis);
+	file << C1 * rotMat_o.transpose();
+	file.close();
+	
+	C1 << C1 * ir;
+	C2 <<
+		1., 0., 0.,
+		1., .25, 0.,
+		1., .5, 0.,
+		1., .75, 0.,
+		1., 1., 0.,
+
+		1., 0., .25,
+		1., .25, .25,
+		1., .5, .25,
+		1., .75, .25,
+		1., 1., .25,
+
+		1., 0., .5,
+		1., .25, .5,
+		1., .5, .5,
+		1., .75, .5,
+		1., 1., .5,
+
+		1., 0., .75,
+		1., .25, .75,
+		1., .5, .75,
+		1., .75, .75,
+		1., 1., .75,
+
+		1., 0., 1.,
+		1., .25, 1.,
+		1., .5, 1.,
+		1., .75, 1.,
+		1., 1., 1.;
+
+	C2 << C2 * cubeSize;
+	//for (int i = 0; i < numKnotInsert; i++)
+		//C3.block(25. * i, 0, 25, 3) = CTemp * rs[i];
 	//C3.block(9.*i, 0, 9, 3) = CTemp * (r* KnotInsert[i]+ ir * (1.- KnotInsert[i]));
 	//C << C2, C1;
-	C << C2, C3, C1;
+	C << C1, C2;
 	//gsInfo << C;
 
 	C.col(0).array() += x;
@@ -242,14 +290,14 @@ int main(int argc, char* argv[])
 #if 1
 	//2
 	gsMatrix<real_t> rotMat = generateRotationMatrix(M_PI * 2. / 3., rotAxis);
-	C << C2 * rotMat.transpose(), C3* rotMat.transpose(), C1* rotMat.transpose();
+	C << C1 * rotMat.transpose(), C2* rotMat.transpose();
 	//C << C2 * rotMat.transpose(), C1* rotMat.transpose();
 
 	gsTensorNurbs<3, real_t> patch2(KV1, KV2, KV3, C, W);
 
 	//3
 	rotMat = generateRotationMatrix(-M_PI * 2. / 3., rotAxis);
-	C << C2 * rotMat.transpose(), C3* rotMat.transpose(), C1* rotMat.transpose();
+	C << C1 * rotMat.transpose(), C2* rotMat.transpose();
 	//C << C2 * rotMat.transpose(), C1* rotMat.transpose();
 
 
@@ -267,7 +315,8 @@ int main(int argc, char* argv[])
 	gsBSplineBasis<real_t>* Bu = new gsBSplineBasis<real_t>(KV1);
 	gsBSplineBasis<real_t>* Bv = new gsBSplineBasis<real_t>(KV2);
 	gsBSplineBasis<real_t>* Bw = new gsBSplineBasis<real_t>(KV3);
-	for (int i = 0; i < numUniRef; i++)
+#if 1
+	for (int i = 0; i < numUniRef_hoop; i++)
 	{
 		gsSparseMatrix<real_t, RowMajor> B[3];
 		gsSparseMatrix<real_t, RowMajor> trans;
@@ -277,7 +326,27 @@ int main(int argc, char* argv[])
 		tensorCombineTransferMatrices<3, real_t>(B, trans);
 		W = trans * W;
 	}
+	for (int i = 0; i < numUniRef_radial; i++)
+	{
+		gsSparseMatrix<real_t, RowMajor> B[3];
+		gsSparseMatrix<real_t, RowMajor> trans;
+		Bu->uniformRefine_withTransfer(B[0], 0);
+		Bv->uniformRefine_withTransfer(B[1], 0);
+		Bw->uniformRefine_withTransfer(B[2], 1);
+		tensorCombineTransferMatrices<3, real_t>(B, trans);
+		W = trans * W;
+	}
 	gsTensorBSplineBasis<3, real_t>* tbasis = new gsTensorBSplineBasis<3, real_t>(Bu, Bv, Bw);
+#else
+	gsTensorBSplineBasis<3, real_t>* tbasis = new gsTensorBSplineBasis<3, real_t>(Bu, Bv, Bw);
+	for (index_t i = 0; i < numUniRef_hoop; i++)
+	{
+		tbasis->x().uniformRefine();
+		tbasis->y().uniformRefine();
+	}
+	for (index_t i = 0; i < numUniRef_radial; i++)
+		tbasis->z().uniformRefine();
+#endif
 	gsTensorNurbsBasis<3, real_t>* basis = new gsTensorNurbsBasis<3, real_t>(tbasis, give(W));
 	gsMultiBasis<> basisDisplacement;
 	basisDisplacement.setTopology(geometry.topology());
@@ -296,10 +365,14 @@ int main(int argc, char* argv[])
 	gsBoundaryConditions<> bcInfo;
 	bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, 1);
 	bcInfo.addCondition(0, boundary::south, condition_type::dirichlet, nullptr, 2);
+	bcInfo.addCondition(0, boundary::back, condition_type::dirichlet, nullptr, 0);
 	bcInfo.addCondition(1, boundary::west, condition_type::dirichlet, nullptr, 2);
 	bcInfo.addCondition(1, boundary::south, condition_type::dirichlet, nullptr, 0);
+	bcInfo.addCondition(1, boundary::back, condition_type::dirichlet, nullptr, 1);
 	bcInfo.addCondition(2, boundary::west, condition_type::dirichlet, nullptr, 0);
 	bcInfo.addCondition(2, boundary::south, condition_type::dirichlet, nullptr, 1);
+	bcInfo.addCondition(2, boundary::back, condition_type::dirichlet, nullptr, 0);
+	bcInfo.addCondition(2, boundary::back, condition_type::dirichlet, nullptr, 1);
 
 	if (surfaceTension > 0 || surfaceYoungsModulus > 0)
 	{
@@ -308,25 +381,11 @@ int main(int argc, char* argv[])
 	}
 
 #if DISPCONTROL
-#if FIX_INNER_SURFACE
+	gsConstantFunction<> dispZ(DeltaDisp, 3);
 	for (int i = 0; i < geometry.nPatches(); i++)
 	{
-		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, nullptr, 0);
-		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, nullptr, 1);
-		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, nullptr, 2);
+		bcInfo.addCondition(i, boundary::back, condition_type::dirichlet, &dispZ, 2);
 	}
-#else
-	real_t dispValue = maxDisp / numLoadSteps;
-	gsFunctionExpr<> dispX(util::to_string(dispValue) + "*x/" + util::to_string(ir), 3);
-	gsFunctionExpr<> dispY(util::to_string(dispValue) + "*y/" + util::to_string(ir), 3);
-	gsFunctionExpr<> dispZ(util::to_string(dispValue) + "*z/" + util::to_string(ir), 3);
-	for (int i = 0; i < geometry.nPatches(); i++)
-	{
-		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, &dispX, 0);
-		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, &dispY, 1);
-		bcInfo.addCondition(i, boundary::front, condition_type::dirichlet, &dispZ, 2);
-	}
-#endif
 #else
 	// neumann BC
 	gsFunctionExpr<> traction("0.0", "0.0", "0.0", 3);
@@ -375,7 +434,8 @@ int main(int argc, char* argv[])
 	fields2["Reaction"] = &reactionField;
 	//fields["CauchyStressTensor"] = &stressField;
 	// paraview collection of time steps
-	std::string filenameParaview = "Cavitation_" + util::to_string(numUniRef) + "_" + util::to_string(youngsModulus) + "_" + util::to_string(poissonsRatio) + "_" + util::to_string(rMax) + "_";
+	//std::string filenameParaview = "SphereInCube_" + util::to_string(numUniRef_hoop) + "_" + util::to_string(youngsModulus) + "_" + util::to_string(poissonsRatio) + "_" + util::to_string(cubeSize) + "_";
+	std::string filenameParaview = "SphereInCube";
 	gsParaviewCollection collection(filenameParaview);
 
 #if DISPCONTROL
@@ -445,7 +505,7 @@ int main(int argc, char* argv[])
 		of << "0\n";
 		of.close();
 	}
-#if 1
+#if 0
 	gsInfo << "Solving...\n";
 	index_t numStepsPerFrame = numLoadSteps / numFrames;
 	index_t cs = 0;

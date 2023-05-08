@@ -24,6 +24,8 @@ public:
 		boundary::side s,
 		stress_components::components component = stress_components::von_mises) const;
 	
+	virtual void constructGeoCalc(gsPiecewiseFunction<T>& result, real_t radius) const;
+
 	virtual void assemble(bool saveEliminationMatrix = false);
 
 	virtual bool assemble(const gsMatrix<T>& solutionVector,

@@ -20,13 +20,13 @@ int main(int argc, char* argv[]){
                 // Input //
     //=====================================//
 
-    std::string filename = ELAST_DATA_DIR"/annulus.xml";
+    std::string filename = ELAST_DATA_DIR"/3patchSphereSurface.xml";
     real_t youngsModulus = 10.0;
     real_t poissonsRatio = 0.4;
     real_t surfaceTension = 1.0;
     real_t surfaceYoungsModulus = 0.0;
     real_t surfacePoissonsRatio = 0.4;
-    index_t numUniRef = 2;
+    index_t numUniRef = 0;
     index_t numDegElev = 0;
     index_t numPlotPoints = 1000;
     index_t numLoadSteps = 20;
@@ -83,8 +83,8 @@ int main(int argc, char* argv[]){
     //}
     //bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
     //bcInfo.addCondition(0, boundary::east, condition_type::dirichlet, &d, 1);
-    bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, 0);
-    bcInfo.addCondition(0, boundary::south, condition_type::dirichlet, nullptr, 1);
+    //bcInfo.addCondition(0, boundary::west, condition_type::dirichlet, nullptr, 0);
+    //bcInfo.addCondition(0, boundary::south, condition_type::dirichlet, nullptr, 1);
     //bcInfo.addCondition(0, boundary::east, condition_type::neumann, &f);
     //bcInfo.addCondition(0, boundary::south, condition_type::robin, nullptr);
     //bcInfo.addCondition(0, boundary::east, condition_type::robin, nullptr);
@@ -115,41 +115,45 @@ int main(int argc, char* argv[]){
 
     gsMultiPatch<> displacement;
     assembler.constructSolution(solver.solution(), solver.allFixedDofs(), displacement);
-    gsPiecewiseFunction<> stresses;
-    assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
+    //gsPiecewiseFunction<> stresses;
+    //assembler.constructCauchyStresses(displacement, stresses, stress_components::von_mises);
     //gsPiecewiseFunction<> reactions;
     //assembler.constructCauchyStressesExtension(displacement, reactions, boundary::east, stress_components::all_2D_vector);
-
+    gsPiecewiseFunction<> geoError;
+    assembler.constructGeoCalc(geoError, 1.);
+	
     // constructing an IGA field (geometry + solution)
     gsField<> displacementField(assembler.patches(), displacement);
     //gsField<> meshAndCnet(displacement, displacement);
-    gsField<> stressField(assembler.patches(), stresses, true);
+    //gsField<> stressField(assembler.patches(), stresses, true);
     //gsField<> reactionField(assembler.patches(), reactions, true);
+	gsField<> geoErrorField(assembler.patches(), geoError, false);
     // creating a container to plot all fields to one Paraview file
     std::map<std::string, const gsField<>*> fields;
-    std::map<std::string, const gsField<>*> fields2;
+    //std::map<std::string, const gsField<>*> fields2;
     fields["Displacement"] = &displacementField;
-    fields["von Mises"] = &stressField;
+	fields["GeoError"] = &geoErrorField;
+    //fields["von Mises"] = &stressField;
 	//fields2["Reactions"] = &reactionField;
     //std::map<std::string, const gsField<>*> meshAndCnetfields;
 	//meshAndCnetfields["MeshAndCnet"] = &meshAndCnet;
     // paraview collection of time steps
-    std::string filenameParaview = "annulus_" + util::to_string(numUniRef) + "_" + util::to_string(youngsModulus) + "_" + util::to_string(surfaceYoungsModulus) + "_";
+    std::string filenameParaview = "3patchSphereSurface_" + util::to_string(numUniRef) + "_" + util::to_string(youngsModulus) + "_" + util::to_string(surfaceYoungsModulus) + "_";
     gsParaviewCollection collection(filenameParaview);
     std::string file1 = "traction.txt";
-    std::string file2 = "displacement.txt";
+    //std::string file2 = "displacement.txt";
     std::ofstream of;
     if (numPlotPoints > 0)
     {
         gsWriteParaviewMultiPhysicsTimeStepWithMesh(fields, filenameParaview, collection, 0, numPlotPoints,true);
-        gsWriteParaviewMultiPhysics(fields, "annulus", numPlotPoints, false, true);
+        gsWriteParaviewMultiPhysics(fields, "3patchSphereSurface_", numPlotPoints, false, true);
         of.open(file1);
         of << "0\n";
         of.close();
 
-        of.open(file2);
-        of << "0\n";
-        of.close();
+        //of.open(file2);
+        //of << "0\n";
+        //of.close();
 		
         //gsWriteParaviewMultiPhysics(fields, filenameParaview + "mesh", numPlotPoints, 1, 0);
     }

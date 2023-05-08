@@ -6,4 +6,5 @@
 namespace gismo
 {
     CLASS_TEMPLATE_INST gsCauchyStressFunctionExtension<real_t>;
+	CLASS_TEMPLATE_INST gsGeoCalcFunction<real_t>;
 }
